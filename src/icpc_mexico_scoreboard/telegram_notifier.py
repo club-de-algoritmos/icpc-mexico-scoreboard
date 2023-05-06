@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import List
 
@@ -13,12 +14,16 @@ except TelegramError:
     print("Could not connect to Telegram")
     raise Exception("Could not connect to Telegram, please check the Telegram API token is correct")
 
-# chat_id = _bot.getUpdates()[0].message.chat.id
-# print(f'Chat ID: {chat_id}')
+
+async def display_chat_id():
+    updates = await _bot.get_updates()
+    print(f'Chat ID: {updates[0].message.chat.id}')
+
+# asyncio.run(display_chat_id())
 
 
 def _get_chat_ids() -> List[str]:
-    return os.environ["TELEGRAM_CHAT_IDS"].split(",")
+    return os.environ["ICPC_MX_TELEGRAM_CHAT_IDS"].split(",")
 
 
 def send_message(text):
@@ -30,7 +35,7 @@ def send_message(text):
 
 
 def _send_message(text, chat_id):
-    _bot.send_message(chat_id, text=_escape(text), parse_mode=ParseMode.MARKDOWN_V2)
+    asyncio.run(_bot.send_message(chat_id, text=_escape(text), parse_mode=ParseMode.MARKDOWN_V2))
 
 
 def _escape(value):

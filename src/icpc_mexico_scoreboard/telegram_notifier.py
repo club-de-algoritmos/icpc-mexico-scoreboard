@@ -8,11 +8,11 @@ from telegram.constants import ParseMode
 
 
 _bot = Bot(token=os.environ["ICPC_MX_TELEGRAM_BOT_TOKEN"])
-try:
-    _bot.get_me()
-except TelegramError:
-    print("Could not connect to Telegram")
-    raise Exception("Could not connect to Telegram, please check the Telegram API token is correct")
+# try:
+#     _bot.getMe()
+# except TelegramError:
+#     print("Could not connect to Telegram")
+#     raise Exception("Could not connect to Telegram, please check the Telegram API token is correct")
 
 
 async def display_chat_id():
@@ -35,12 +35,4 @@ def send_message(text):
 
 
 def _send_message(text, chat_id):
-    asyncio.run(_bot.send_message(chat_id, text=_escape(text), parse_mode=ParseMode.MARKDOWN_V2))
-
-
-def _escape(value):
-    chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
-    escaped = str(value)
-    for char in chars:
-        escaped = escaped.replace(char, f"\\{char}")
-    return escaped
+    asyncio.run(_bot.send_message(chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2))

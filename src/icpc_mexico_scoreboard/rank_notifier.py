@@ -10,10 +10,18 @@ from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScorebo
 logger = logging.getLogger(__name__)
 
 
+def escape(value):
+    chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
+    escaped = str(value)
+    for char in chars:
+        escaped = escaped.replace(char, f"\\{char}")
+    return escaped
+
+
 def _notify_error(error: str) -> None:
     print("Got unexpected error: ", error)
     print()
-    send_message("Got unexpected error: " + error)
+    send_message(escape("Got unexpected error: " + error))
 
 
 def _notify_info(info: str) -> None:
@@ -42,7 +50,7 @@ def _wait_until_contest_starts(scoreboard_url: str) -> ParsedBocaScoreboard:
             return parse_boca_scoreboard(scoreboard_url)
         except NotAScoreboardError as e:
             print(e)
-            _notify_info("The contest has not started")
+            _notify_info("El concurso no ha iniciado")
         except Exception as e:
             _notify_error(str(e))
         time.sleep(60)  # Wait a minute
@@ -65,23 +73,23 @@ def _get_solved_names(team: ParsedBocaScoreboardTeam) -> Set[str]:
 
 
 def _solved_as_str(solved: Set[str]) -> str:
-    return "(" + ", ".join(sorted(solved)) + ")"
+    return "\\(" + ", ".join(sorted(solved)) + "\\)"
 
 
 def _get_solved_summary(team: ParsedBocaScoreboardTeam) -> str:
     if not team.total_solved:
-        return "no problems"
+        return "0 problemas"
 
     solved_names = _solved_as_str(_get_solved_names(team))
     if team.total_solved == 1:
-        return f"1 problem {solved_names}"
-    return f"{team.total_solved} problems {solved_names}"
+        return f"1 problema {solved_names}"
+    return f"{team.total_solved} problemas {solved_names}"
 
 
 def _get_current_rank(teams: List[ParsedBocaScoreboardTeam]) -> str:
     def get_rank(team: ParsedBocaScoreboardTeam) -> str:
         solved_summary = _get_solved_summary(team)
-        return f"#{team.place} - {team.name}: solved {solved_summary} in {team.total_penalty} minutes"
+        return f"\\#{team.place} _{escape(team.name)}_ resolvió {solved_summary} en {team.total_penalty} minutos"
 
     sorted_teams = sorted(teams, key=lambda t: t.place)
     return "\n".join(map(get_rank, sorted_teams))
@@ -94,8 +102,8 @@ def _get_solved_diff_summary(old_team: ParsedBocaScoreboardTeam, new_team: Parse
 
     solved_names = _solved_as_str(_get_solved_names(new_team).difference(_get_solved_names(old_team)))
     if solved == 1:
-        return f"1 problem {solved_names}"
-    return f"{solved} problems {solved_names}"
+        return f"1 problema {solved_names}"
+    return f"{solved} problemas {solved_names}"
 
 
 def _get_rank_update(old_teams: List[ParsedBocaScoreboardTeam], new_teams: List[ParsedBocaScoreboardTeam]) -> str:
@@ -103,25 +111,18 @@ def _get_rank_update(old_teams: List[ParsedBocaScoreboardTeam], new_teams: List[
     updates = []
     for new_team in new_teams:
         if new_team.name not in teams:
-            updates.append(f"Team {new_team.name} appeared in scoreboard")
+            updates.append(f"El equipo _{escape(new_team.name)}_ apareció en el scoreboard")
             continue
 
         old_team = teams[new_team.name]
         solved_diff_summary = _get_solved_diff_summary(old_team, new_team)
-        if old_team.place != new_team.place:
-            if solved_diff_summary:
-                updates.append(
-                    f"Team {new_team.name} solved {solved_diff_summary}, "
-                    f"moving from place {old_team.place} to {new_team.place}"
-                )
+        if solved_diff_summary:
+            update = f"El equipo _{escape(new_team.name)} resolvió {solved_diff_summary}, "
+            if old_team.place == new_team.place:
+                update += f"quedándose en el mismo lugar {old_team.place}"
             else:
-                solved_summary = _get_solved_summary(new_team)
-                updates.append(
-                    f"Team {new_team.name} moved from place {old_team.place} to {new_team.place}, "
-                    f"staying at {solved_summary} solved"
-                )
-        elif solved_diff_summary:
-            updates.append(f"Team {new_team.name} solved {solved_diff_summary}, " f"staying at place {new_team.place}")
+                update += f"cambiando del lugar {old_team.place} al {new_team.place}"
+            updates.append(update)
 
     return "\n".join(updates)
 
@@ -164,7 +165,7 @@ def notify_rank_updates_until_finished(scoreboard_url: str, team_query: str) -> 
         try:
             notify_rank_updates(scoreboard_url, team_query)
         except NotAScoreboardError:
-            _notify_info("The contest has ended")
+            _notify_info("El concurso terminó")
             return
         except Exception as e:
             logging.exception('Unexpected error')

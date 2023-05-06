@@ -1,5 +1,6 @@
 import time
 
+import requests
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
@@ -24,17 +25,22 @@ def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
 
 
 def _parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
-    driver = _setup_webdriver()
-    driver.get(scoreboard_url)
-    # TODO: Wait properly
-    time.sleep(5)
-    # Multi-sites like Brazil use an iframe, switch to it if found
-    iframes = driver.find_elements(By.TAG_NAME, "iframe")
-    if iframes:
-        driver.switch_to.frame(iframes[0])
-    html = BeautifulSoup(driver.page_source, "html.parser")
-    driver.quit()
+    if "icpcmexico.org" in scoreboard_url:
+        response = requests.get(scoreboard_url)
+        scoreboard_html = response.content
+    else:
+        driver = _setup_webdriver()
+        driver.get(scoreboard_url)
+        # TODO: Wait properly
+        time.sleep(5)
+        # Multi-sites like Brazil use an iframe, switch to it if found
+        iframes = driver.find_elements(By.TAG_NAME, "iframe")
+        if iframes:
+            driver.switch_to.frame(iframes[0])
+        scoreboard_html = driver.page_source
+        driver.quit()
 
+    html = BeautifulSoup(scoreboard_html, "html.parser")
     table = html.find(id="myscoretable")
     if not table:
         raise NotAScoreboardError("Scoreboard table not found")

@@ -5,7 +5,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 
-from wkoach.boca.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, ParsedBocaScoreboardProblem
+from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, ParsedBocaScoreboardProblem
 
 
 class NotAScoreboardError(Exception):

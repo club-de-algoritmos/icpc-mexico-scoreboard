@@ -6,7 +6,7 @@ from telegram.error import TelegramError
 from telegram.constants import ParseMode
 
 
-_bot = Bot(token=os.environ["TELEGRAM_BOT_TOKEN"])
+_bot = Bot(token=os.environ["ICPC_MX_TELEGRAM_BOT_TOKEN"])
 try:
     _bot.get_me()
 except TelegramError:

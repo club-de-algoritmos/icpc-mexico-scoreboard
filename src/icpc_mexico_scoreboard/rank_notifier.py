@@ -1,11 +1,10 @@
+import asyncio
 import logging
-import time
 from typing import List, Dict, Set
 
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard, NotAScoreboardError
 from icpc_mexico_scoreboard.telegram_notifier import send_message
 from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam
-
 
 logger = logging.getLogger(__name__)
 
@@ -18,42 +17,42 @@ def escape(value):
     return escaped
 
 
-def _notify_error(error: str) -> None:
+async def _notify_error(error: str) -> None:
     print("Got unexpected error: ", error)
     print()
-    send_message(escape("Got unexpected error: " + error))
+    await send_message(escape("Got unexpected error: " + error))
 
 
-def _notify_info(info: str) -> None:
+async def _notify_info(info: str) -> None:
     print(info)
     print()
-    send_message(info)
+    await send_message(info)
 
 
-def _notify_current_rank(current_rank: str) -> None:
+async def _notify_current_rank(current_rank: str) -> None:
     print("Current rank:")
     print(current_rank)
     print()
-    send_message(current_rank)
+    await send_message(current_rank)
 
 
-def _notify_rank_update(rank_update: str) -> None:
+async def _notify_rank_update(rank_update: str) -> None:
     print("Rank update:")
     print(rank_update)
     print()
-    send_message(rank_update)
+    await send_message(rank_update)
 
 
-def _wait_until_contest_starts(scoreboard_url: str) -> ParsedBocaScoreboard:
+async def _wait_until_contest_starts(scoreboard_url: str) -> ParsedBocaScoreboard:
     while True:
         try:
             return parse_boca_scoreboard(scoreboard_url)
         except NotAScoreboardError as e:
             print(e)
-            _notify_info("El concurso no ha iniciado")
+            await _notify_info("El concurso no ha iniciado")
         except Exception as e:
-            _notify_error(str(e))
-        time.sleep(60)  # Wait a minute
+            await _notify_error(str(e))
+        await asyncio.sleep(60)  # Wait a minute
 
 
 def _filter_teams(scoreboard: ParsedBocaScoreboard, team_query: str) -> List[ParsedBocaScoreboardTeam]:
@@ -134,39 +133,33 @@ def notify_current_rank(scoreboard_url: str, team_query: str) -> None:
     _notify_current_rank(current_rank)
 
 
-def notify_rank_updates(scoreboard_url: str, team_query: str) -> None:
-    scoreboard = _wait_until_contest_starts(scoreboard_url)
+async def notify_rank_updates(scoreboard_url: str, team_query: str) -> None:
+    scoreboard = await _wait_until_contest_starts(scoreboard_url)
     watched_teams = _filter_teams(scoreboard, team_query)
     current_rank = _get_current_rank(watched_teams)
-    _notify_current_rank(current_rank)
+    await _notify_current_rank(current_rank)
 
-    next_notify_rank = 5
     while True:
-        time.sleep(60)  # Notify updates every minute
+        await asyncio.sleep(60)  # Notify updates every minute
 
-        new_scoreboard = parse_boca_scoreboard(scoreboard_url)
-        new_watched_teams = _filter_teams(new_scoreboard, team_query)
+        scoreboard = parse_boca_scoreboard(scoreboard_url)
+        new_watched_teams = _filter_teams(scoreboard, team_query)
         rank_update = _get_rank_update(watched_teams, new_watched_teams)
         if rank_update:
-            _notify_rank_update(rank_update)
-        scoreboard = new_scoreboard
+            await _notify_rank_update(rank_update)
         watched_teams = new_watched_teams
-
-        next_notify_rank -= 1
-        if next_notify_rank == 0:
-            next_notify_rank = 5
-            watched_teams = _filter_teams(scoreboard, team_query)
-            current_rank = _get_current_rank(watched_teams)
-            _notify_current_rank(current_rank)
+        # TODO: Detect freeze and notify rank
+        # current_rank = _get_current_rank(watched_teams)
+        # _notify_current_rank(current_rank)
 
 
-def notify_rank_updates_until_finished(scoreboard_url: str, team_query: str) -> None:
+async def notify_rank_updates_until_finished(scoreboard_url: str, team_query: str) -> None:
     while True:
         try:
-            notify_rank_updates(scoreboard_url, team_query)
+            await notify_rank_updates(scoreboard_url, team_query)
         except NotAScoreboardError:
-            _notify_info("El concurso terminó")
+            await _notify_info("El concurso terminó")
             return
         except Exception as e:
             logging.exception('Unexpected error')
-            _notify_error(str(e))
+            await _notify_error(str(e))

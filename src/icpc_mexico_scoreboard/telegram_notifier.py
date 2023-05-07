@@ -26,13 +26,9 @@ def _get_chat_ids() -> List[str]:
     return os.environ["ICPC_MX_TELEGRAM_CHAT_IDS"].split(",")
 
 
-def send_message(text):
+async def send_message(text):
     for chat_id in _get_chat_ids():
         try:
-            _send_message(text, chat_id)
+            await _bot.send_message(chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             print("Could not send Telegram message ", e)
-
-
-def _send_message(text, chat_id):
-    asyncio.run(_bot.send_message(chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2))

@@ -39,6 +39,6 @@ class TelegramNotifier:
 
     async def send_message(self, text: str, chat_id: int) -> None:
         try:
-            await self._app.bot.send_message(chat_id, text=text, parse_mode=ParseMode.MARKDOWN_V2)
+            await self._app.bot.send_message(chat_id, text=text, parse_mode=ParseMode.HTML)
         except Exception as e:
             print("Could not send Telegram message ", e)

@@ -89,15 +89,16 @@ class ScoreboardNotifier:
             return
 
         if not self._scoreboard:
-            await self._telegram.send_message('Todavía no tenemos el scoreboard, reintenta de nuevo más tarde',
+            await self._telegram.send_message(f'Todavía no tenemos el scoreboard del concurso <i>{contest.name}</i>, '
+                                              f'reintenta de nuevo más tarde',
                                               telegram_user.chat_id)
             return
 
         user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
         if not user or not user.team_query_subscription:
-            await self._telegram.send_message(escape('No sigues ningún equipo, ejecuta el commando '
-                                                     '`/seguir <subcadena1>, <subcadena2>, ...` '
-                                                     'para seguir los equipos que quieres'),
+            await self._telegram.send_message('No sigues ningún equipo, ejecuta el commando '
+                                              '<code>/seguir <subcadena1>, <subcadena2>, ...</code> '
+                                              'para seguir los equipos que quieres',
                                               telegram_user.chat_id)
             return
 
@@ -107,7 +108,7 @@ class ScoreboardNotifier:
                                           telegram_user.chat_id)
 
     async def _notify_error(self, error: str) -> None:
-        await self._telegram.send_message(escape("Got unexpected error: " + error), _DEVELOPER_CHAT_ID)
+        await self._telegram.send_message(f"Got unexpected error: <code>{error}</code>", _DEVELOPER_CHAT_ID)
 
     async def _notify_info(self, info: str) -> None:
         logger.info(info)
@@ -130,7 +131,7 @@ class ScoreboardNotifier:
         return set(map(lambda p: p.name, filter(lambda p: p.is_solved, team.problems)))
 
     def _solved_as_str(self, solved: Set[str]) -> str:
-        return "\\(" + ", ".join(sorted(solved)) + "\\)"
+        return "(" + ", ".join(sorted(solved)) + ")"
 
     def _get_solved_summary(self, team: ParsedBocaScoreboardTeam) -> str:
         if not team.total_solved:
@@ -144,7 +145,8 @@ class ScoreboardNotifier:
     def _get_current_rank(self, teams: List[ParsedBocaScoreboardTeam]) -> str:
         def get_rank(team: ParsedBocaScoreboardTeam) -> str:
             solved_summary = self._get_solved_summary(team)
-            return f"\\#{team.place} _{escape(team.name)}_ resolvió {solved_summary} en {team.total_penalty} minutos"
+            return f"<b>#{team.place}</b> <code>{team.name}</code> " \
+                   f"resolvió {solved_summary} en {team.total_penalty} minutos"
 
         sorted_teams = sorted(teams, key=lambda t: (t.place, t.name.lower()))
         return "\n".join(map(get_rank, sorted_teams))
@@ -166,13 +168,13 @@ class ScoreboardNotifier:
         for new_team in new_teams:
             if new_team.name not in teams:
                 # TODO: Re-work to account for server restarts
-                updates.append(f"El equipo _{escape(new_team.name)}_ apareció en el scoreboard")
+                updates.append(f"El equipo <code>{new_team.name}</code> apareció en el scoreboard")
                 continue
 
             old_team = teams[new_team.name]
             solved_diff_summary = self._get_solved_diff_summary(old_team, new_team)
             if solved_diff_summary:
-                update = f"El equipo _{escape(new_team.name)} resolvió {solved_diff_summary}, "
+                update = f"El equipo <code>{new_team.name}</code> resolvió {solved_diff_summary}, "
                 if old_team.place == new_team.place:
                     update += f"quedándose en el mismo lugar {old_team.place}"
                 else:
@@ -191,4 +193,4 @@ class ScoreboardNotifier:
 
     async def _notify_contest_has_ended(self, contest: Contest) -> None:
         for user in self._get_users_with_subscriptions():
-            await self._telegram.send_message(f'El concurso {contest.name} terminó', user.telegram_chat_id)
+            await self._telegram.send_message(f'El concurso <i>{contest.name}</i> terminó', user.telegram_chat_id)

@@ -1,5 +1,6 @@
-from icpc_mexico_scoreboard.rank_notifier import notify_rank_updates_until_finished
+from icpc_mexico_scoreboard.rank_notifier import ScoreboardNotifier
 
 
 async def start() -> None:
-    await notify_rank_updates_until_finished("https://score.icpcmexico.org", "IT Culiacan|UASinaloa|FIMAZ")
+    scoreboard = ScoreboardNotifier()
+    await scoreboard.start_running()

@@ -1,12 +1,17 @@
 import asyncio
 import logging
-from typing import List, Dict, Set
+import os
+from datetime import datetime
+from typing import List, Dict, Set, Optional
 
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard, NotAScoreboardError
-from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier
-from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam
+from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramUser
+from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, Contest, ScoreboardUser
 
 logger = logging.getLogger(__name__)
+
+
+_DEVELOPER_CHAT_ID = int(os.environ["ICPC_MX_TELEGRAM_DEVELOPER_CHAT_ID"])
 
 
 def escape(value):
@@ -18,55 +23,104 @@ def escape(value):
 
 
 class ScoreboardNotifier:
-    _telegram: TelegramNotifier
+    _telegram: Optional[TelegramNotifier] = None
+    # TODO: Use a lock to write/read scoreboards
+    _previous_scoreboard: Optional[ParsedBocaScoreboard] = None
+    _scoreboard: Optional[ParsedBocaScoreboard] = None
 
     async def start_running(self) -> None:
+        logger.debug('Starting up')
         self._telegram = TelegramNotifier()
-        await self._telegram.start_running()
-        await self.notify_rank_updates_until_finished("https://score.icpcmexico.org", "IT Culiacan|UASinaloa|FIMAZ")
+        await self._telegram.start_running(get_rank_callback=self._get_rank)
+        await self._start_parsing_scoreboards()
+
+    async def _start_parsing_scoreboards(self) -> None:
+        logger.debug('Starting to parse scoreboards')
+        previous_contest = None
+        while True:
+            contest = self._get_current_contest(actively_running_only=True)
+            if not contest:
+                logger.debug('No contest identified')
+                if previous_contest:
+                    await self._notify_contest_has_ended(previous_contest)
+                    previous_contest = None
+
+                await asyncio.sleep(60)
+                continue
+
+            logger.debug(f'Parsing the scoreboard of contest {contest.name}')
+            try:
+                scoreboard = parse_boca_scoreboard(contest.scoreboard_url)
+                self._previous_scoreboard = self._scoreboard
+                self._scoreboard = scoreboard
+                await self._notify_rank_updates()
+            except NotAScoreboardError:
+                logger.info(f"El concurso {contest.name} no ha iniciado")
+            except Exception as e:
+                logging.exception('Unexpected error')
+                await self._notify_error(str(e))
+
+            previous_contest = contest
+            await asyncio.sleep(60)
 
     async def stop_running(self) -> None:
         await self._telegram.stop_running()
 
+    def _get_current_contest(self, actively_running_only: bool) -> Optional[Contest]:
+        # TODO: Implement actively_running_only
+        # TODO: Get from DB
+        return Contest(name='ICPC Mexico 2022 - TEST',
+                       scoreboard_url="https://score.icpcmexico.org",
+                       starts_at=datetime(2022, 1, 1, 0, 0, 0),
+                       freezes_at=datetime(2024, 1, 1, 0, 0, 0),
+                       ends_at=datetime(2024, 1, 1, 0, 0, 0))
+
+    def _get_users_with_subscriptions(self) -> List[ScoreboardUser]:
+        return [ScoreboardUser(telegram_chat_id=_DEVELOPER_CHAT_ID,
+                               team_query_subscription="IT Culiacan, UASinaloa, FIMAZ")]
+
+    def _get_user_by_telegram_chat_id(self, telegram_chat_id: int) -> Optional[ScoreboardUser]:
+        return next(user for user in self._get_users_with_subscriptions() if user.telegram_chat_id == telegram_chat_id)
+
+    async def _get_rank(self, telegram_user: TelegramUser) -> None:
+        contest = self._get_current_contest(actively_running_only=False)
+        if not contest:
+            await self._telegram.send_message('No hay concurso actual', telegram_user.chat_id)
+            return
+
+        if not self._scoreboard:
+            await self._telegram.send_message('Todavía no tenemos el scoreboard, reintenta de nuevo más tarde',
+                                              telegram_user.chat_id)
+            return
+
+        user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
+        if not user or not user.team_query_subscription:
+            await self._telegram.send_message(escape('No sigues ningún equipo, ejecuta el commando '
+                                                     '`/seguir <subcadena1>, <subcadena2>, ...` '
+                                                     'para seguir los equipos que quieres'),
+                                              telegram_user.chat_id)
+            return
+
+        watched_teams = self._filter_teams(self._scoreboard, user.team_query_subscription)
+        current_rank = self._get_current_rank(watched_teams)
+        await self._telegram.send_message(current_rank or 'Ningún equipo que sigues fué encontrado',
+                                          telegram_user.chat_id)
+
     async def _notify_error(self, error: str) -> None:
-        print("Got unexpected error: ", error)
-        print()
-        await self._telegram.send_message(escape("Got unexpected error: " + error))
+        await self._telegram.send_message(escape("Got unexpected error: " + error), _DEVELOPER_CHAT_ID)
 
     async def _notify_info(self, info: str) -> None:
-        print(info)
-        print()
-        await self._telegram.send_message(info)
+        logger.info(info)
+        await self._telegram.send_message(info, _DEVELOPER_CHAT_ID)
 
-    async def _notify_current_rank(self, current_rank: str) -> None:
-        print("Current rank:")
-        print(current_rank)
-        print()
-        await self._telegram.send_message(current_rank)
+    def _filter_teams(self, scoreboard: Optional[ParsedBocaScoreboard], team_query: str
+                      ) -> List[ParsedBocaScoreboardTeam]:
+        if not scoreboard:
+            return []
 
-    async def _notify_rank_update(self, rank_update: str) -> None:
-        print("Rank update:")
-        print(rank_update)
-        print()
-        await self._telegram.send_message(rank_update)
-
-    async def _wait_until_contest_starts(self, scoreboard_url: str) -> ParsedBocaScoreboard:
-        while True:
-            try:
-                return parse_boca_scoreboard(scoreboard_url)
-            except NotAScoreboardError as e:
-                print(e)
-                await self._notify_info("El concurso no ha iniciado")
-            except Exception as e:
-                await self._notify_error(str(e))
-            await asyncio.sleep(60)  # Wait a minute
-
-    def _filter_teams(self, scoreboard: ParsedBocaScoreboard, team_query: str) -> List[ParsedBocaScoreboardTeam]:
         def matches_team(team: ParsedBocaScoreboardTeam) -> bool:
-            # return bool(re.search(team_query.lower(), team.name.lower()))
-            # return team_query.lower() in team.name.lower()
-            for subquery in team_query.lower().split('|'):
-                if subquery in team.name.lower():
+            for subquery in team_query.lower().split(','):
+                if subquery.strip() in team.name.lower():
                     return True
             return False
 
@@ -92,7 +146,7 @@ class ScoreboardNotifier:
             solved_summary = self._get_solved_summary(team)
             return f"\\#{team.place} _{escape(team.name)}_ resolvió {solved_summary} en {team.total_penalty} minutos"
 
-        sorted_teams = sorted(teams, key=lambda t: t.place)
+        sorted_teams = sorted(teams, key=lambda t: (t.place, t.name.lower()))
         return "\n".join(map(get_rank, sorted_teams))
 
     def _get_solved_diff_summary(self, old_team: ParsedBocaScoreboardTeam, new_team: ParsedBocaScoreboardTeam) -> str:
@@ -105,11 +159,13 @@ class ScoreboardNotifier:
             return f"1 problema {solved_names}"
         return f"{solved} problemas {solved_names}"
 
-    def _get_rank_update(self, old_teams: List[ParsedBocaScoreboardTeam], new_teams: List[ParsedBocaScoreboardTeam]) -> str:
+    def _get_rank_update(self, old_teams: List[ParsedBocaScoreboardTeam], new_teams: List[ParsedBocaScoreboardTeam]
+                         ) -> str:
         teams: Dict[str, ParsedBocaScoreboardTeam] = {t.name: t for t in old_teams}
         updates = []
         for new_team in new_teams:
             if new_team.name not in teams:
+                # TODO: Re-work to account for server restarts
                 updates.append(f"El equipo _{escape(new_team.name)}_ apareció en el scoreboard")
                 continue
 
@@ -125,38 +181,14 @@ class ScoreboardNotifier:
 
         return "\n".join(updates)
 
-    def notify_current_rank(self, scoreboard_url: str, team_query: str) -> None:
-        scoreboard = parse_boca_scoreboard(scoreboard_url)
-        watched_teams = self._filter_teams(scoreboard, team_query)
-        current_rank = self._get_current_rank(watched_teams)
-        self._notify_current_rank(current_rank)
-
-    async def notify_rank_updates(self, scoreboard_url: str, team_query: str) -> None:
-        scoreboard = await self._wait_until_contest_starts(scoreboard_url)
-        watched_teams = self._filter_teams(scoreboard, team_query)
-        current_rank = self._get_current_rank(watched_teams)
-        await self._notify_current_rank(current_rank)
-
-        while True:
-            await asyncio.sleep(60)  # Notify updates every minute
-
-            scoreboard = parse_boca_scoreboard(scoreboard_url)
-            new_watched_teams = self._filter_teams(scoreboard, team_query)
-            rank_update = self._get_rank_update(watched_teams, new_watched_teams)
+    async def _notify_rank_updates(self) -> None:
+        for user in self._get_users_with_subscriptions():
+            previous_teams = self._filter_teams(self._previous_scoreboard, user.team_query_subscription)
+            teams = self._filter_teams(self._scoreboard, user.team_query_subscription)
+            rank_update = self._get_rank_update(previous_teams, teams)
             if rank_update:
-                await self._notify_rank_update(rank_update)
-            watched_teams = new_watched_teams
-            # TODO: Detect freeze and notify rank
-            # current_rank = _get_current_rank(watched_teams)
-            # _notify_current_rank(current_rank)
+                await self._telegram.send_message(rank_update, user.telegram_chat_id)
 
-    async def notify_rank_updates_until_finished(self, scoreboard_url: str, team_query: str) -> None:
-        while True:
-            try:
-                await self.notify_rank_updates(scoreboard_url, team_query)
-            except NotAScoreboardError:
-                await self._notify_info("El concurso terminó")
-                return
-            except Exception as e:
-                logging.exception('Unexpected error')
-                await self._notify_error(str(e))
+    async def _notify_contest_has_ended(self, contest: Contest) -> None:
+        for user in self._get_users_with_subscriptions():
+            await self._telegram.send_message(f'El concurso {contest.name} terminó', user.telegram_chat_id)

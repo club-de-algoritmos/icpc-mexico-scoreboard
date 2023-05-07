@@ -1,4 +1,5 @@
 import time
+from typing import Set
 
 import requests
 from selenium import webdriver
@@ -52,14 +53,16 @@ def _parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
 
     problem_names = [cell.text.strip() for cell in table_header.find_all("td")[3:-1]]
     teams_elements = table_rows[1:]
-    scoreboard = ParsedBocaScoreboard()
+    teams = []
+    seen_team_names: Set[str] = set()
     for teams_element in teams_elements:
         cell_elements = teams_element.find_all("td")
 
         name = cell_elements[2].text.strip()
         # Multi-sites have duplicate teams, only parse the first one
-        if scoreboard.teams and scoreboard.teams[-1].name == name:
+        if name in seen_team_names:
             continue
+        seen_team_names.add(name)
 
         place = int(cell_elements[0].text.strip())
         user_site = cell_elements[1].text.strip()
@@ -87,9 +90,9 @@ def _parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
         team = ParsedBocaScoreboardTeam(
             name=name, place=place, user_site=user_site, total_solved=total_solved, total_penalty=total_penalty,
             problems=problems)
-        scoreboard.teams.append(team)
+        teams.append(team)
 
-    return scoreboard
+    return ParsedBocaScoreboard(teams=teams)
 
 
 def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
@@ -112,7 +115,8 @@ def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
 
     problem_names = [cell.text.strip() for cell in table_header.find_all(class_="problema")]
     teams_elements = table_rows[1:]
-    scoreboard = ParsedBocaScoreboard()
+    teams = []
+    seen_team_names: Set[str] = set()
     for teams_element in teams_elements:
         if 'display:none' in teams_element.get('style', ''):
             continue
@@ -120,8 +124,9 @@ def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
         team_prefix = teams_element.find(class_="run_prefix")
         name = team_prefix.find(class_="nomeTime").text.strip()
         # Multi-sites have duplicate teams, only parse the first one
-        if scoreboard.teams and scoreboard.teams[-1].name == name:
+        if name in seen_team_names:
             continue
+        seen_team_names.add(name)
 
         place = int(team_prefix.find_all(class_="colocacao")[1].text.strip())
         total_solved = int(team_prefix.find(class_="cima").text.strip())
@@ -154,6 +159,6 @@ def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
         team = ParsedBocaScoreboardTeam(
             name=name, place=place, user_site='', total_solved=total_solved, total_penalty=total_penalty,
             problems=problems)
-        scoreboard.teams.append(team)
+        teams.append(team)
 
-    return scoreboard
+    return ParsedBocaScoreboard(teams=teams)

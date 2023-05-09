@@ -1,6 +1,6 @@
-from datetime import datetime
 from dataclasses import dataclass
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Set
 
 
 @dataclass(frozen=True)
@@ -38,4 +38,4 @@ class Contest:
 @dataclass(frozen=True)
 class ScoreboardUser:
     telegram_chat_id: int
-    team_query_subscription: Optional[str]
+    team_query_subscriptions: Set[str]

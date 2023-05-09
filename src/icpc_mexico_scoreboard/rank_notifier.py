@@ -176,9 +176,9 @@ class ScoreboardNotifier:
             if solved_diff_summary:
                 update = f"El equipo <code>{new_team.name}</code> resolvió {solved_diff_summary}, "
                 if old_team.place == new_team.place:
-                    update += f"quedándose en el mismo lugar {old_team.place}"
+                    update += f"quedándose en el mismo lugar <b>#{old_team.place}</b>"
                 else:
-                    update += f"cambiando del lugar {old_team.place} al {new_team.place}"
+                    update += f"cambiando del lugar #{old_team.place} al <b>#{new_team.place}</b>"
                 updates.append(update)
 
         return "\n".join(updates)

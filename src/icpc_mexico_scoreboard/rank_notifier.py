@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 _DEVELOPER_CHAT_ID = int(os.environ["ICPC_MX_TELEGRAM_DEVELOPER_CHAT_ID"])
 
 
-def escape(value):
-    chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
-    escaped = str(value)
-    for char in chars:
-        escaped = escaped.replace(char, f"\\{char}")
-    return escaped
+def _escape(value: str) -> str:
+    return value.replace("<", "&lt;")
+
+
+def _format_code(code: str) -> str:
+    return f"<code>{_escape(code)}</code>"
 
 
 _test_user = ScoreboardUser(
@@ -92,7 +92,7 @@ class ScoreboardNotifier:
     def _get_user_by_telegram_chat_id(self, telegram_chat_id: int) -> Optional[ScoreboardUser]:
         return next(user for user in self._get_users_with_subscriptions() if user.telegram_chat_id == telegram_chat_id)
 
-    async def _get_scoreboard(self, telegram_user: TelegramUser) -> None:
+    async def _get_scoreboard(self, telegram_user: TelegramUser, search_text: Optional[str]) -> None:
         contest = self._get_current_contest(actively_running_only=False)
         if not contest:
             await self._telegram.send_message('No hay concurso actual', telegram_user.chat_id)
@@ -104,15 +104,19 @@ class ScoreboardNotifier:
                                               telegram_user.chat_id)
             return
 
+        if search_text:
+            await self._notify_scoreboard(telegram_user, {search_text})
+            return
+
         user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
         if not user or not user.team_query_subscriptions:
             await self._telegram.send_message('No sigues ningún equipo, ejecuta el commando '
-                                              '<code>/seguir subcadena</code> '
+                                              f'{_format_code("/seguir subcadena")}'
                                               'para seguir los equipos que quieras',
                                               telegram_user.chat_id)
             return
 
-        await self._notify_scoreboard(user, user.team_query_subscriptions)
+        await self._notify_scoreboard(telegram_user, user.team_query_subscriptions)
 
     async def _follow(self, telegram_user: TelegramUser, follow_text: str) -> None:
         user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
@@ -120,13 +124,13 @@ class ScoreboardNotifier:
             user = ScoreboardUser(telegram_chat_id=telegram_user.chat_id, team_query_subscriptions=set())
         user.team_query_subscriptions.add(follow_text)
         # Notify of scoreboard, only for the new subscription
-        await self._notify_scoreboard(user, {follow_text})
+        await self._notify_scoreboard(telegram_user, {follow_text})
 
-    async def _notify_scoreboard(self, user: ScoreboardUser, team_query_subscriptions: Set[str]) -> None:
+    async def _notify_scoreboard(self, telegram_user: TelegramUser, team_query_subscriptions: Set[str]) -> None:
         watched_teams = self._filter_teams(self._scoreboard, team_query_subscriptions)
         current_rank = self._get_current_rank(watched_teams)
         await self._telegram.send_message(current_rank or 'Ningún equipo que sigues fué encontrado',
-                                          user.telegram_chat_id)
+                                          telegram_user.chat_id)
 
     async def _show_following(self, telegram_user: TelegramUser) -> None:
         user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
@@ -140,10 +144,10 @@ class ScoreboardNotifier:
         user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
         if user:
             user.team_query_subscriptions.remove(unfollow_text)
-        await self._telegram.send_message(f'Ya no sigues <code>{unfollow_text}</code>', telegram_user.chat_id)
+        await self._telegram.send_message(f'Ya no sigues {_format_code(unfollow_text)}', telegram_user.chat_id)
 
     async def _notify_error(self, error: str) -> None:
-        await self._telegram.send_message(f"Got unexpected error: <code>{error}</code>", _DEVELOPER_CHAT_ID)
+        await self._telegram.send_message(f"Got unexpected error: {_format_code(error)}", _DEVELOPER_CHAT_ID)
 
     async def _notify_info(self, info: str) -> None:
         logger.info(info)
@@ -182,7 +186,7 @@ class ScoreboardNotifier:
     def _get_current_rank(self, teams: List[ParsedBocaScoreboardTeam]) -> str:
         def get_rank(team: ParsedBocaScoreboardTeam) -> str:
             solved_summary = self._get_solved_summary(team)
-            return f"<b>#{team.place}</b> <code>{team.name}</code> " \
+            return f"<b>#{team.place}</b> {_format_code(team.name)} " \
                    f"resolvió {solved_summary} en {team.total_penalty} minutos"
 
         sorted_teams = sorted(teams, key=lambda t: (t.place, t.name.lower()))
@@ -205,13 +209,13 @@ class ScoreboardNotifier:
         for new_team in new_teams:
             if new_team.name not in teams:
                 # TODO: Re-work to account for server restarts
-                updates.append(f"El equipo <code>{new_team.name}</code> apareció en el scoreboard")
+                updates.append(f"El equipo {_format_code(new_team.name)} apareció en el scoreboard")
                 continue
 
             old_team = teams[new_team.name]
             solved_diff_summary = self._get_solved_diff_summary(old_team, new_team)
             if solved_diff_summary:
-                update = f"El equipo <code>{new_team.name}</code> resolvió {solved_diff_summary}, "
+                update = f"El equipo {_format_code(new_team.name)} resolvió {solved_diff_summary}, "
                 if old_team.place == new_team.place:
                     update += f"quedándose en el mismo lugar <b>#{old_team.place}</b>"
                 else:

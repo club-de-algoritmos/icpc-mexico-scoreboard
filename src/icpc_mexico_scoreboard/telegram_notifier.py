@@ -17,10 +17,17 @@ class TelegramUser:
         return TelegramUser(chat_id=update.effective_chat.id)
 
 
-_GetScoreboardCallback = Callable[[TelegramUser], Awaitable[None]]
+_GetScoreboardCallback = Callable[[TelegramUser, Optional[str]], Awaitable[None]]
 _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _ShowFollowingCallback = Callable[[TelegramUser], Awaitable[None]]
 _StopFollowingCallback = Callable[[TelegramUser, str], Awaitable[None]]
+
+
+def _get_command_args(message: str) -> Optional[str]:
+    separator = message.find(' ')
+    if separator < 0:
+        return None
+    return message[separator:].strip() or None
 
 
 class TelegramNotifier:
@@ -56,13 +63,12 @@ class TelegramNotifier:
             await self._app.shutdown()
 
     async def _get_scoreboard(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._get_scoreboard_callback(TelegramUser.from_update(update))
+        search_text = _get_command_args(update.message.text)
+        await self._get_scoreboard_callback(TelegramUser.from_update(update), search_text)
 
     async def _follow(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-        follow_text = update.message.text
-        separator = follow_text.find(' ')
-        follow_text = follow_text[separator:].strip()
-        if separator < 0 or not follow_text:
+        follow_text = _get_command_args(update.message.text)
+        if not follow_text:
             await update.message.reply_html('Especifica una subcadena despues de <code>/seguir</code>')
             return
         await self._follow_callback(TelegramUser.from_update(update), follow_text)

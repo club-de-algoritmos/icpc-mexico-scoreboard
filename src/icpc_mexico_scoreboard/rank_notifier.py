@@ -107,8 +107,8 @@ class ScoreboardNotifier:
         user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
         if not user or not user.team_query_subscriptions:
             await self._telegram.send_message('No sigues ningún equipo, ejecuta el commando '
-                                              '<code>/seguir <subcadena1>, <subcadena2>, ...</code> '
-                                              'para seguir los equipos que quieres',
+                                              '<code>/seguir subcadena</code> '
+                                              'para seguir los equipos que quieras',
                                               telegram_user.chat_id)
             return
 

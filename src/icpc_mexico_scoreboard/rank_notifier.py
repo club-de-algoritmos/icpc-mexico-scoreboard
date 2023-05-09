@@ -37,7 +37,12 @@ class ScoreboardNotifier:
     async def start_running(self) -> None:
         logger.debug('Starting up')
         self._telegram = TelegramNotifier()
-        await self._telegram.start_running(get_scoreboard_callback=self._get_scoreboard, follow_callback=self._follow)
+        await self._telegram.start_running(
+            get_scoreboard_callback=self._get_scoreboard,
+            follow_callback=self._follow,
+            show_following_callback=self._show_following,
+            stop_following_callback=self._stop_following,
+        )
         await self._start_parsing_scoreboards()
 
     async def _start_parsing_scoreboards(self) -> None:
@@ -122,6 +127,20 @@ class ScoreboardNotifier:
         current_rank = self._get_current_rank(watched_teams)
         await self._telegram.send_message(current_rank or 'Ningún equipo que sigues fué encontrado',
                                           user.telegram_chat_id)
+
+    async def _show_following(self, telegram_user: TelegramUser) -> None:
+        user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
+        if not user or not user.team_query_subscriptions:
+            await self._telegram.send_message('No sigues a ningún equipo', user.telegram_chat_id)
+            return
+
+        await self._telegram.show_following(sorted(user.team_query_subscriptions), user.telegram_chat_id)
+
+    async def _stop_following(self, telegram_user: TelegramUser, unfollow_text: str) -> None:
+        user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
+        if user:
+            user.team_query_subscriptions.remove(unfollow_text)
+        await self._telegram.send_message(f'Ya no sigues <code>{unfollow_text}</code>', telegram_user.chat_id)
 
     async def _notify_error(self, error: str) -> None:
         await self._telegram.send_message(f"Got unexpected error: <code>{error}</code>", _DEVELOPER_CHAT_ID)

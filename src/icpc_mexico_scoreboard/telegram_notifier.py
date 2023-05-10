@@ -123,7 +123,15 @@ class TelegramNotifier:
         await self._stop_following_callback(TelegramUser.from_update(update), unfollow_text)
 
     async def _help(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-        pass
+        await update.message.reply_html(
+'''¡Yo puedo ayudarte a mantenerte informado sobre el scoreboard del ICPC México!
+
+<a href="/top">/top</a> - Entérate del top 10 del scoreboard, agrega un entero para especificar cuántos equipos quieres ver. Por ejemplo, <code>/top 5</code>.
+<a href="/scoreboard">/scoreboard</a> - Entérate del scoreboard filtrado por los equipos que estás siguiendo. Especifica una subcdena si quieres saber sobre algunos equipos solamente, y no los que sigues, por ejemplo, <code>/scoreboard itsur</code>.
+<a href="/seguir">/seguir</a> - Comienza a seguir equipos cuyo nombre tengan la subcadena que especifiques, te notificaremos cuando estos equipos resuelvan un problema. Por ejemplo, <code>/seguir Culiacan</code>.
+<a href="/dejar">/dejar</a> - Úsalo cuando quieras dejar de seguir a algunos equipos, sólo da click en la subcadena que quieras dejar de seguir.
+'''
+        )
 
     async def send_developer_message(self, text: str) -> None:
         await self.send_message(text, _DEVELOPER_CHAT_ID)

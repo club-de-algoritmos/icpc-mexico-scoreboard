@@ -162,11 +162,11 @@ class ScoreboardNotifier:
         await self._telegram.send_message(f'Ya no sigues {_format_code(unfollow_text)}', telegram_user.chat_id)
 
     async def _notify_error(self, error: str) -> None:
-        await self._telegram.send_message(f"Got unexpected error: {_format_code(error)}", _DEVELOPER_CHAT_ID)
+        await self._telegram.send_developer_message(f"Got unexpected error: {_format_code(error)}")
 
     async def _notify_info(self, info: str) -> None:
         logger.info(info)
-        await self._telegram.send_message(info, _DEVELOPER_CHAT_ID)
+        await self._telegram.send_developer_message(info)
 
     def _filter_teams(
             self,

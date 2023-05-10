@@ -3,7 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import Optional, Callable, Awaitable, List
 
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
@@ -48,6 +48,8 @@ class TelegramNotifier:
         self._app.add_handler(CommandHandler("seguir", self._follow))
         self._app.add_handler(CommandHandler("dejar", self._show_following))
         self._app.add_handler(CallbackQueryHandler(self._stop_following))
+        # TODO: Top
+        # TODO: Help
 
         self._get_scoreboard_callback = get_scoreboard_callback
         self._follow_callback = follow_callback

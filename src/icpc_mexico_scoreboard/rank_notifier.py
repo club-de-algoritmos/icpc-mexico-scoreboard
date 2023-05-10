@@ -87,6 +87,7 @@ class ScoreboardNotifier:
                        ends_at=datetime(2024, 1, 1, 0, 0, 0))
 
     def _get_users_with_subscriptions(self) -> List[ScoreboardUser]:
+        # TODO: Get from DB
         return [_test_user]
 
     def _get_user_by_telegram_chat_id(self, telegram_chat_id: int) -> Optional[ScoreboardUser]:
@@ -153,10 +154,11 @@ class ScoreboardNotifier:
         logger.info(info)
         await self._telegram.send_message(info, _DEVELOPER_CHAT_ID)
 
-    def _filter_teams(self,
-                      scoreboard: Optional[ParsedBocaScoreboard],
-                      queries: Iterable[str],
-                      ) -> List[ParsedBocaScoreboardTeam]:
+    def _filter_teams(
+            self,
+            scoreboard: Optional[ParsedBocaScoreboard],
+            queries: Iterable[str],
+    ) -> List[ParsedBocaScoreboardTeam]:
         if not scoreboard:
             return []
 

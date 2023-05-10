@@ -1,6 +1,6 @@
 import logging
 
-from icpc_mexico_scoreboard.rank_notifier import ScoreboardNotifier
+from icpc_mexico_scoreboard.scoreboard_notifier import ScoreboardNotifier
 
 
 async def start() -> None:

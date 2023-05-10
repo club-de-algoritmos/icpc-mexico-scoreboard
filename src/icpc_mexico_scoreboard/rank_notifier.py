@@ -38,6 +38,7 @@ class ScoreboardNotifier:
         logger.debug('Starting up')
         self._telegram = TelegramNotifier()
         await self._telegram.start_running(
+            get_top_callback=self._get_top,
             get_scoreboard_callback=self._get_scoreboard,
             follow_callback=self._follow,
             show_following_callback=self._show_following,
@@ -93,16 +94,32 @@ class ScoreboardNotifier:
     def _get_user_by_telegram_chat_id(self, telegram_chat_id: int) -> Optional[ScoreboardUser]:
         return next(user for user in self._get_users_with_subscriptions() if user.telegram_chat_id == telegram_chat_id)
 
-    async def _get_scoreboard(self, telegram_user: TelegramUser, search_text: Optional[str]) -> None:
+    async def _notify_if_no_scoreboard(self, telegram_user: TelegramUser) -> bool:
         contest = self._get_current_contest(actively_running_only=False)
         if not contest:
             await self._telegram.send_message('No hay concurso actual', telegram_user.chat_id)
-            return
+            return True
 
         if not self._scoreboard:
             await self._telegram.send_message(f'Todavía no tenemos el scoreboard del concurso <i>{contest.name}</i>, '
                                               f'reintenta de nuevo más tarde',
                                               telegram_user.chat_id)
+            return True
+
+        return False
+
+    async def _get_top(self, telegram_user: TelegramUser, top_n: Optional[int]) -> None:
+        if await self._notify_if_no_scoreboard(telegram_user):
+            return
+
+        n = 10 if top_n is None or top_n <= 0 else top_n
+        top_teams = self._scoreboard.teams[:n]
+        top_rank = self._get_current_rank(top_teams)
+        await self._telegram.send_message(top_rank or 'El scoreboard está vacío',
+                                          telegram_user.chat_id)
+
+    async def _get_scoreboard(self, telegram_user: TelegramUser, search_text: Optional[str]) -> None:
+        if await self._notify_if_no_scoreboard(telegram_user):
             return
 
         if search_text:

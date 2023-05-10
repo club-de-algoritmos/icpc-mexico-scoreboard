@@ -17,6 +17,7 @@ class TelegramUser:
         return TelegramUser(chat_id=update.effective_chat.id)
 
 
+_GetTopCallback = Callable[[TelegramUser, Optional[int]], Awaitable[None]]
 _GetScoreboardCallback = Callable[[TelegramUser, Optional[str]], Awaitable[None]]
 _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _ShowFollowingCallback = Callable[[TelegramUser], Awaitable[None]]
@@ -32,25 +33,28 @@ def _get_command_args(message: str) -> Optional[str]:
 
 class TelegramNotifier:
     _app: Optional[Application]
+    _get_top_callback: Optional[_GetTopCallback]
     _get_scoreboard_callback: Optional[_GetScoreboardCallback]
     _follow_callback: Optional[_FollowCallback]
     _show_following_callback: Optional[_ShowFollowingCallback]
     _stop_following_callback: Optional[_StopFollowingCallback]
 
     async def start_running(self,
+                            get_top_callback: _GetTopCallback,
                             get_scoreboard_callback: _GetScoreboardCallback,
                             follow_callback: _FollowCallback,
                             show_following_callback: _ShowFollowingCallback,
                             stop_following_callback: _StopFollowingCallback,
                             ) -> None:
         self._app = Application.builder().token(os.environ["ICPC_MX_TELEGRAM_BOT_TOKEN"]).build()
+        self._app.add_handler(CommandHandler("top", self._get_top))
         self._app.add_handler(CommandHandler("scoreboard", self._get_scoreboard))
         self._app.add_handler(CommandHandler("seguir", self._follow))
         self._app.add_handler(CommandHandler("dejar", self._show_following))
         self._app.add_handler(CallbackQueryHandler(self._stop_following))
-        # TODO: Top
         # TODO: Help
 
+        self._get_top_callback = get_top_callback
         self._get_scoreboard_callback = get_scoreboard_callback
         self._follow_callback = follow_callback
         self._show_following_callback = show_following_callback
@@ -63,6 +67,17 @@ class TelegramNotifier:
     async def stop_running(self) -> None:
         if self._app:
             await self._app.shutdown()
+
+    async def _get_top(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        top_n_text = _get_command_args(update.message.text)
+        top_n = None
+        if top_n_text:
+            try:
+                top_n = int(top_n_text)
+            except ValueError:
+                pass
+
+        await self._get_top_callback(TelegramUser.from_update(update), top_n)
 
     async def _get_scoreboard(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         search_text = _get_command_args(update.message.text)

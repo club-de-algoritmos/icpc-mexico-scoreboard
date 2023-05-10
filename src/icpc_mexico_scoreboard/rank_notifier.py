@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 import os
 from datetime import datetime
@@ -14,12 +15,8 @@ logger = logging.getLogger(__name__)
 _DEVELOPER_CHAT_ID = int(os.environ["ICPC_MX_TELEGRAM_DEVELOPER_CHAT_ID"])
 
 
-def _escape(value: str) -> str:
-    return value.replace("<", "&lt;")
-
-
 def _format_code(code: str) -> str:
-    return f"<code>{_escape(code)}</code>"
+    return f"<code>{html.escape(code)}</code>"
 
 
 _test_user = ScoreboardUser(

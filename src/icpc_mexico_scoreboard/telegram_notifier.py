@@ -32,6 +32,7 @@ _StopFollowingCallback = Callable[[TelegramUser, str], Awaitable[None]]
 
 
 _DEVELOPER_CHAT_ID = int(os.environ["ICPC_MX_TELEGRAM_DEVELOPER_CHAT_ID"])
+_MESSAGE_SIZE_LIMIT = 4096
 
 
 def _get_command_args(message: str) -> Optional[str]:
@@ -141,8 +142,7 @@ class TelegramNotifier:
         tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
         tb_string = "".join(tb_list)
 
-        # Build the message with some markup and additional information about what happened.
-        # You might need to add some logic to deal with messages longer than the 4096 character limit.
+        # Build the message with some markup and additional information about what happened
         update_str = update.to_dict() if isinstance(update, Update) else str(update)
         message = (
             f"An exception was raised while handling an update\n"
@@ -152,6 +152,7 @@ class TelegramNotifier:
             f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
             f"<pre>{html.escape(tb_string)}</pre>"
         )
+        if len(message) > _MESSAGE_SIZE_LIMIT:
+            message = message[:_MESSAGE_SIZE_LIMIT-3] + "..."
 
-        # Finally, send the message
         await self.send_developer_message(message)

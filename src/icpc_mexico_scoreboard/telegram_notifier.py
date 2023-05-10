@@ -7,7 +7,7 @@ import traceback
 from dataclasses import dataclass
 from typing import Optional, Callable, Awaitable, List, Any
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
@@ -57,14 +57,16 @@ class TelegramNotifier:
                             show_following_callback: _ShowFollowingCallback,
                             stop_following_callback: _StopFollowingCallback,
                             ) -> None:
-        self._app = Application.builder().token(os.environ["ICPC_MX_TELEGRAM_BOT_TOKEN"]).build()
+
+        token = os.environ["ICPC_MX_TELEGRAM_BOT_TOKEN"]
+        self._app = Application.builder().token(token).build()
+
         self._app.add_handler(CommandHandler("top", self._get_top))
         self._app.add_handler(CommandHandler("scoreboard", self._get_scoreboard))
         self._app.add_handler(CommandHandler("seguir", self._follow))
         self._app.add_handler(CommandHandler("dejar", self._show_following))
         self._app.add_handler(CallbackQueryHandler(self._stop_following))
         self._app.add_handler(CommandHandler("ayuda", self._help))
-        self._app.add_handler(CommandHandler("help", self._help))
         self._app.add_error_handler(self._handle_error)
 
         self._get_top_callback = get_top_callback
@@ -74,7 +76,17 @@ class TelegramNotifier:
         self._stop_following_callback = stop_following_callback
 
         await self._app.initialize()
+        commands = [
+            BotCommand("top", "Entérate del top del scoreboard"),
+            BotCommand("scoreboard", "Entérate del scoreboard de tus equipos"),
+            BotCommand("seguir", "Comienza a seguir equipos"),
+            BotCommand("dejar", "Deja de seguir equipos"),
+            BotCommand("ayuda", "Muestra la ayuda sobre los comandos"),
+        ]
+        await self._app.bot.set_my_commands(commands)
+
         await self._app.updater.start_polling()
+        # Start it up async
         await asyncio.ensure_future(self._app.start())
 
     async def stop_running(self) -> None:

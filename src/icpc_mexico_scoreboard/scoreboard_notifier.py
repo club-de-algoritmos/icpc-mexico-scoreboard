@@ -41,6 +41,18 @@ async def _get_users_with_subscriptions() -> List[ScoreboardUser]:
     return await _query_to_list(ScoreboardSubscription.objects.filter().values_list('user', flat=True).distinct())
 
 
+def _get_current_contest(actively_running_only: bool) -> Optional[Contest]:
+    # TODO: Get from DB
+    contest = Contest(name='Primera Fecha - ICPC Mexico 2023',
+                      scoreboard_url="https://score.icpcmexico.org",
+                      starts_at=datetime(2023, 5, 13, 20, 0, 0),
+                      freezes_at=datetime(2023, 5, 14, 0, 0, 0),
+                      ends_at=datetime(2023, 5, 14, 1, 0, 0))
+    if not actively_running_only or contest.starts_at <= datetime.utcnow() <= contest.ends_at:
+        return contest
+    return None
+
+
 class ScoreboardNotifier:
     _telegram: Optional[TelegramNotifier] = None
     # TODO: Use a lock to write/read scoreboards
@@ -63,7 +75,7 @@ class ScoreboardNotifier:
         logger.debug('Starting to parse scoreboards')
         previous_contest = None
         while True:
-            contest = self._get_current_contest(actively_running_only=True)
+            contest = _get_current_contest(actively_running_only=True)
             if not contest:
                 logger.debug('No contest identified')
                 if previous_contest:
@@ -91,17 +103,8 @@ class ScoreboardNotifier:
     async def stop_running(self) -> None:
         await self._telegram.stop_running()
 
-    def _get_current_contest(self, actively_running_only: bool) -> Optional[Contest]:
-        # TODO: Implement actively_running_only
-        # TODO: Get from DB
-        return Contest(name='ICPC Mexico 2022 - TEST',
-                       scoreboard_url="https://score.icpcmexico.org",
-                       starts_at=datetime(2022, 1, 1, 0, 0, 0),
-                       freezes_at=datetime(2024, 1, 1, 0, 0, 0),
-                       ends_at=datetime(2024, 1, 1, 0, 0, 0))
-
     async def _notify_if_no_scoreboard(self, telegram_user: TelegramUser) -> bool:
-        contest = self._get_current_contest(actively_running_only=False)
+        contest = _get_current_contest(actively_running_only=False)
         if not contest:
             await self._telegram.send_message('No hay concurso actual', telegram_user.chat_id)
             return True
@@ -146,6 +149,10 @@ class ScoreboardNotifier:
     async def _follow(self, telegram_user: TelegramUser, follow_text: str) -> None:
         user = await _get_or_create_user(telegram_user.chat_id)
         await ScoreboardSubscription.objects.aget_or_create(user=user, subscription=follow_text)
+
+        if await self._notify_if_no_scoreboard(telegram_user):
+            return
+
         # Notify of scoreboard, only for the new subscription
         await self._notify_scoreboard(telegram_user, {follow_text})
 

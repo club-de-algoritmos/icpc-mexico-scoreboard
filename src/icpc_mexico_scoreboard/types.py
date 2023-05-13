@@ -33,9 +33,3 @@ class Contest:
     starts_at: datetime
     freezes_at: datetime
     ends_at: datetime
-
-
-@dataclass(frozen=True)
-class ScoreboardUser:
-    telegram_chat_id: int
-    team_query_subscriptions: Set[str]

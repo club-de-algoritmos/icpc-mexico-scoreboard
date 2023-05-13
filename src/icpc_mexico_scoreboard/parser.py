@@ -25,8 +25,8 @@ def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
     return _parse_boca_scoreboard(scoreboard_url)
 
 
-def _parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
-    if "icpcmexico.org" in scoreboard_url:
+def _parse_boca_scoreboard(scoreboard_url: str, optimize: bool = True) -> ParsedBocaScoreboard:
+    if "icpcmexico.org" in scoreboard_url and optimize:
         response = requests.get(scoreboard_url)
         scoreboard_html = response.content
     else:

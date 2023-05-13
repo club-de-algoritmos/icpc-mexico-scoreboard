@@ -5,9 +5,12 @@ import os
 from datetime import datetime
 from typing import List, Dict, Set, Optional, Iterable
 
+from django.db.models import QuerySet
+
+from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard, NotAScoreboardError
 from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramUser
-from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, Contest, ScoreboardUser
+from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, Contest
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +22,23 @@ def _format_code(code: str) -> str:
     return f"<code>{html.escape(code)}</code>"
 
 
-_test_user = ScoreboardUser(
-    telegram_chat_id=_DEVELOPER_CHAT_ID,
-    team_query_subscriptions={"IT Culiacan", "UASinaloa", "FIMAZ"},
-)
+async def _query_to_list(queryset: QuerySet) -> List:
+    return [e async for e in queryset]
+
+
+async def _get_or_create_user(telegram_chat_id: int) -> ScoreboardUser:
+    user, _ = await ScoreboardUser.objects.aget_or_create(telegram_chat_id=telegram_chat_id)
+    return user
+
+
+async def _get_user_subscriptions(user: ScoreboardUser) -> List[str]:
+    return sorted(
+        await _query_to_list(
+            ScoreboardSubscription.objects.filter(user=user).values_list('subscription', flat=True)))
+
+
+async def _get_users_with_subscriptions() -> List[ScoreboardUser]:
+    return await _query_to_list(ScoreboardSubscription.objects.filter().values_list('user', flat=True).distinct())
 
 
 class ScoreboardNotifier:
@@ -84,13 +100,6 @@ class ScoreboardNotifier:
                        freezes_at=datetime(2024, 1, 1, 0, 0, 0),
                        ends_at=datetime(2024, 1, 1, 0, 0, 0))
 
-    def _get_users_with_subscriptions(self) -> List[ScoreboardUser]:
-        # TODO: Get from DB
-        return [_test_user]
-
-    def _get_user_by_telegram_chat_id(self, telegram_chat_id: int) -> Optional[ScoreboardUser]:
-        return next(user for user in self._get_users_with_subscriptions() if user.telegram_chat_id == telegram_chat_id)
-
     async def _notify_if_no_scoreboard(self, telegram_user: TelegramUser) -> bool:
         contest = self._get_current_contest(actively_running_only=False)
         if not contest:
@@ -123,42 +132,41 @@ class ScoreboardNotifier:
             await self._notify_scoreboard(telegram_user, {search_text})
             return
 
-        user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
-        if not user or not user.team_query_subscriptions:
+        user = await _get_or_create_user(telegram_user.chat_id)
+        subscriptions = await _get_user_subscriptions(user)
+        if not subscriptions:
             await self._telegram.send_message('No sigues ningún equipo, ejecuta el commando '
                                               f'{_format_code("/seguir subcadena")}'
                                               'para seguir los equipos que quieras',
                                               telegram_user.chat_id)
             return
 
-        await self._notify_scoreboard(telegram_user, user.team_query_subscriptions)
+        await self._notify_scoreboard(telegram_user, subscriptions)
 
     async def _follow(self, telegram_user: TelegramUser, follow_text: str) -> None:
-        user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
-        if not user:
-            user = ScoreboardUser(telegram_chat_id=telegram_user.chat_id, team_query_subscriptions=set())
-        user.team_query_subscriptions.add(follow_text)
+        user = await _get_or_create_user(telegram_user.chat_id)
+        await ScoreboardSubscription.objects.aget_or_create(user=user, subscription=follow_text)
         # Notify of scoreboard, only for the new subscription
         await self._notify_scoreboard(telegram_user, {follow_text})
 
-    async def _notify_scoreboard(self, telegram_user: TelegramUser, team_query_subscriptions: Set[str]) -> None:
+    async def _notify_scoreboard(self, telegram_user: TelegramUser, team_query_subscriptions: Iterable[str]) -> None:
         watched_teams = self._filter_teams(self._scoreboard, team_query_subscriptions)
         current_rank = self._get_current_rank(watched_teams)
         await self._telegram.send_message(current_rank or 'Ningún equipo que sigues fué encontrado',
                                           telegram_user.chat_id)
 
     async def _show_following(self, telegram_user: TelegramUser) -> None:
-        user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
-        if not user or not user.team_query_subscriptions:
+        user = await _get_or_create_user(telegram_user.chat_id)
+        subscriptions = await _get_user_subscriptions(user)
+        if not subscriptions:
             await self._telegram.send_message('No sigues a ningún equipo', user.telegram_chat_id)
             return
 
-        await self._telegram.show_following(sorted(user.team_query_subscriptions), user.telegram_chat_id)
+        await self._telegram.show_following(subscriptions, user.telegram_chat_id)
 
     async def _stop_following(self, telegram_user: TelegramUser, unfollow_text: str) -> None:
-        user = self._get_user_by_telegram_chat_id(telegram_user.chat_id)
-        if user:
-            user.team_query_subscriptions.remove(unfollow_text)
+        user = await _get_or_create_user(telegram_user.chat_id)
+        await ScoreboardSubscription.objects.filter(user=user, subscription=unfollow_text).adelete()
         await self._telegram.send_message(f'Ya no sigues {_format_code(unfollow_text)}', telegram_user.chat_id)
 
     async def _notify_error(self, error: str) -> None:
@@ -241,13 +249,15 @@ class ScoreboardNotifier:
         return "\n".join(updates)
 
     async def _notify_rank_updates(self) -> None:
-        for user in self._get_users_with_subscriptions():
-            previous_teams = self._filter_teams(self._previous_scoreboard, user.team_query_subscriptions)
-            teams = self._filter_teams(self._scoreboard, user.team_query_subscriptions)
+        # TODO: Improve performance
+        for user in await _get_users_with_subscriptions():
+            subscriptions = await _get_user_subscriptions(user)
+            previous_teams = self._filter_teams(self._previous_scoreboard, subscriptions)
+            teams = self._filter_teams(self._scoreboard, subscriptions)
             rank_update = self._get_rank_update(previous_teams, teams)
             if rank_update:
                 await self._telegram.send_message(rank_update, user.telegram_chat_id)
 
     async def _notify_contest_has_ended(self, contest: Contest) -> None:
-        for user in self._get_users_with_subscriptions():
+        for user in await _get_users_with_subscriptions():
             await self._telegram.send_message(f'El concurso <i>{contest.name}</i> terminó', user.telegram_chat_id)

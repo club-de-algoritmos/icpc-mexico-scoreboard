@@ -24,12 +24,3 @@ class ParsedBocaScoreboardTeam:
 @dataclass(frozen=True)
 class ParsedBocaScoreboard:
     teams: List[ParsedBocaScoreboardTeam]
-
-
-@dataclass(frozen=True)
-class Contest:
-    name: str
-    scoreboard_url: str
-    starts_at: datetime
-    freezes_at: datetime
-    ends_at: datetime

@@ -6,10 +6,10 @@ from typing import List, Dict, Set, Optional, Iterable
 
 from django.db.models import QuerySet
 
-from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription
+from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard, NotAScoreboardError
 from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramUser
-from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, Contest
+from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +39,13 @@ async def _get_users_with_subscriptions() -> List[ScoreboardUser]:
     return await _query_to_list(ScoreboardUser.objects.filter(pk__in=user_ids))
 
 
-def _get_current_contest() -> Optional[Contest]:
-    # TODO: Get from DB
-    return Contest(name='Primera Fecha - ICPC Mexico 2023',
-                   scoreboard_url="https://score.icpcmexico.org",
-                   starts_at=datetime(2023, 5, 13, 20, 0, 0),
-                   freezes_at=datetime(2023, 5, 14, 0, 0, 0),
-                   ends_at=datetime(2023, 5, 14, 1, 0, 0))
+async def _get_current_contest() -> Optional[Contest]:
+    return await Contest.objects.filter(starts_at__lte=datetime.utcnow()).order_by('starts_at').alast()
+    #return Contest(name='Primera Fecha - ICPC Mexico 2023',
+    #               scoreboard_url="https://score.icpcmexico.org",
+    #               starts_at=datetime(2023, 5, 13, 20, 0, 0),
+    #               freezes_at=datetime(2023, 5, 14, 0, 0, 0),
+    #               ends_at=datetime(2023, 5, 14, 1, 0, 0))
 
 
 class ScoreboardNotifier:
@@ -70,7 +70,7 @@ class ScoreboardNotifier:
         logger.debug('Starting to parse scoreboards')
         previous_contest = None
         while True:
-            contest = _get_current_contest()
+            contest = await _get_current_contest()
             if not contest or not contest.starts_at <= datetime.utcnow() <= (contest.ends_at + timedelta(hours=3)):
                 logger.debug('No actively running contest')
                 if previous_contest:
@@ -99,7 +99,7 @@ class ScoreboardNotifier:
         await self._telegram.stop_running()
 
     async def _notify_if_no_scoreboard(self, telegram_user: TelegramUser) -> bool:
-        contest = _get_current_contest()
+        contest = await _get_current_contest()
         if not contest:
             await self._telegram.send_message('No hay concurso actual', telegram_user.chat_id)
             return True

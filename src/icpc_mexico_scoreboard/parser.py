@@ -7,11 +7,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 
-from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, ParsedBocaScoreboardProblem
-
-
-class NotAScoreboardError(Exception):
-    pass
+from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, \
+    ParsedBocaScoreboardProblem, NotAScoreboardError
 
 
 def _setup_webdriver() -> webdriver.Chrome:

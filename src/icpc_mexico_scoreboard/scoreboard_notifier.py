@@ -7,9 +7,9 @@ from typing import List, Dict, Set, Optional, Iterable
 from django.db.models import QuerySet
 
 from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest, ScoreboardStatus
-from icpc_mexico_scoreboard.parser import parse_boca_scoreboard, NotAScoreboardError
+from icpc_mexico_scoreboard.parser import parse_boca_scoreboard
+from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, NotAScoreboardError
 from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramUser
-from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ async def _get_current_contest() -> Optional[Contest]:
 
 class ScoreboardNotifier:
     _telegram: Optional[TelegramNotifier] = None
-    # TODO: Use a lock to write/read scoreboards
+    # TODO: Get from DB
     _previous_scoreboard: Optional[ParsedBocaScoreboard] = None
     _scoreboard: Optional[ParsedBocaScoreboard] = None
 
@@ -117,8 +117,10 @@ class ScoreboardNotifier:
                         f"cuando los resultados finales se liberen, serás notificado del scoreboard final")
 
             logger.debug(f"Parsing the scoreboard of contest {contest.name}")
+            # TODO: Move scoreboard status to RELEASED when applicable
             try:
                 scoreboard = parse_boca_scoreboard(contest.scoreboard_url)
+                # TODO: Store scoreboard in DB
                 self._previous_scoreboard = self._scoreboard
                 self._scoreboard = scoreboard
                 await self._notify_rank_updates()

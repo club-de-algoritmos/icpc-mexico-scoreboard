@@ -1,6 +1,9 @@
 from dataclasses import dataclass
-from datetime import datetime
-from typing import List, Set
+from typing import List
+
+
+class NotAScoreboardError(Exception):
+    pass
 
 
 @dataclass(frozen=True)

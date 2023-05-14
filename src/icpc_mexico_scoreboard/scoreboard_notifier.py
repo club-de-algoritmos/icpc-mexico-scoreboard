@@ -1,7 +1,6 @@
 import asyncio
 import html
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Set, Optional, Iterable
 
@@ -13,9 +12,6 @@ from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramU
 from icpc_mexico_scoreboard.types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, Contest
 
 logger = logging.getLogger(__name__)
-
-
-_DEVELOPER_CHAT_ID = int(os.environ["ICPC_MX_TELEGRAM_DEVELOPER_CHAT_ID"])
 
 
 def _format_code(code: str) -> str:

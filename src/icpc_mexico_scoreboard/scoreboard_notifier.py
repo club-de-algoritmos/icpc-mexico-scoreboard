@@ -38,7 +38,9 @@ async def _get_user_subscriptions(user: ScoreboardUser) -> List[str]:
 
 
 async def _get_users_with_subscriptions() -> List[ScoreboardUser]:
-    return await _query_to_list(ScoreboardSubscription.objects.filter().values_list('user', flat=True).distinct())
+    user_ids = await _query_to_list(
+        ScoreboardSubscription.objects.filter().values_list('user_id', flat=True).distinct())
+    return await _query_to_list(ScoreboardUser.objects.filter(pk__in=user_ids))
 
 
 def _get_current_contest() -> Optional[Contest]:

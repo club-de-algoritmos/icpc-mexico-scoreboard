@@ -71,14 +71,18 @@ class ScoreboardNotifier:
         previous_contest = None
         while True:
             contest = await _get_current_contest()
-            if not contest or not contest.starts_at <= datetime.utcnow() <= (contest.ends_at + timedelta(hours=3)):
-                logger.debug('No actively running contest')
+            if not contest:  # or not contest.starts_at <= datetime.utcnow() <= (contest.ends_at + timedelta(hours=3)):
+                logger.debug('No contest is actively running')
                 if previous_contest:
-                    await self._notify_contest_has_ended(previous_contest)
+                    await self._notify_all_subscribed_users(f"El concurso <i>{previous_contest.name}</i> terminó")
                     previous_contest = None
 
                 await asyncio.sleep(60)
                 continue
+
+            if previous_contest and previous_contest.pk != contest.pk:
+                # TODO:
+                pass
 
             logger.debug(f'Parsing the scoreboard of contest {contest.name}')
             try:
@@ -260,6 +264,6 @@ class ScoreboardNotifier:
             if rank_update:
                 await self._telegram.send_message(rank_update, user.telegram_chat_id)
 
-    async def _notify_contest_has_ended(self, contest: Contest) -> None:
+    async def _notify_all_subscribed_users(self, message: str) -> None:
         for user in await _get_users_with_subscriptions():
-            await self._telegram.send_message(f'El concurso <i>{contest.name}</i> terminó', user.telegram_chat_id)
+            await self._telegram.send_message(message, user.telegram_chat_id)

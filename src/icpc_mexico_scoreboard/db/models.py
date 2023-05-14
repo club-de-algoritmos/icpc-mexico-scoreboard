@@ -21,7 +21,7 @@ class Contest(models.Model):
 
 
 class ScoreboardUser(models.Model):
-    telegram_chat_id = models.IntegerField(db_index=True)
+    telegram_chat_id = models.IntegerField(unique=True)
 
 
 class ScoreboardSubscription(models.Model):

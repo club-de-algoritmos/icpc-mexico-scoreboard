@@ -8,6 +8,7 @@ class ScoreboardStatus(models.TextChoices):
     INVISIBLE = "invisible"
     VISIBLE = "visible"
     FROZEN = "frozen"
+    WAITING_TO_BE_RELEASED = "waiting_to_be_released"
     RELEASED = "released"
 
 

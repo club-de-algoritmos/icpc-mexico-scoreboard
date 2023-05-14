@@ -126,8 +126,8 @@ class TelegramNotifier:
                 text="Elige lo que deseas dejar de seguir:",
                 reply_markup=markup,
             )
-        except Exception as e:
-            print("Could not send Telegram message ", e)
+        except Exception:
+            logger.exception("Could not send Telegram message")
 
     async def _stop_following(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         unfollow_text = update.callback_query.data
@@ -157,8 +157,8 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
     async def send_message(self, text: str, chat_id: int) -> None:
         try:
             await self._app.bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
-        except Exception as e:
-            print("Could not send Telegram message ", e)
+        except Exception:
+            logger.exception("Could not send Telegram message",)
 
     async def _handle_error(self, update: Any, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Log the error and send a telegram message to notify the developer."""

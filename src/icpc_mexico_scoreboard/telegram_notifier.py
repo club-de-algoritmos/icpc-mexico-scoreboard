@@ -11,7 +11,6 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotComm
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +28,6 @@ _GetScoreboardCallback = Callable[[TelegramUser, Optional[str]], Awaitable[None]
 _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _ShowFollowingCallback = Callable[[TelegramUser], Awaitable[None]]
 _StopFollowingCallback = Callable[[TelegramUser, str], Awaitable[None]]
-
 
 _DEVELOPER_CHAT_ID = int(os.environ["ICPC_MX_TELEGRAM_DEVELOPER_CHAT_ID"])
 _MESSAGE_SIZE_LIMIT = 4096
@@ -67,6 +65,7 @@ class TelegramNotifier:
         self._app.add_handler(CommandHandler("dejar", self._show_following))
         self._app.add_handler(CallbackQueryHandler(self._stop_following))
         self._app.add_handler(CommandHandler("ayuda", self._help))
+        self._app.add_handler(CommandHandler("start", self._start))
         self._app.add_error_handler(self._handle_error)
 
         self._get_top_callback = get_top_callback
@@ -134,15 +133,22 @@ class TelegramNotifier:
         unfollow_text = update.callback_query.data
         await self._stop_following_callback(TelegramUser.from_update(update), unfollow_text)
 
+    async def _start(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        await update.message.reply_html(
+            '''¡Hola! Soy un bot <b>no oficial</b> que puede ayudarte a mantenerte informado sobre el scoreboard del ICPC México.
+        
+Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
+            '''
+        )
+
     async def _help(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(
-'''¡Yo puedo ayudarte a mantenerte informado sobre el scoreboard del ICPC México!
-
+            '''
 <a href="/top">/top</a> - Entérate del top 10 del scoreboard, agrega un entero para especificar cuántos equipos quieres ver. Por ejemplo, <code>/top 5</code>.
 <a href="/scoreboard">/scoreboard</a> - Entérate del scoreboard filtrado por los equipos que estás siguiendo. Especifica una subcdena si quieres saber sobre algunos equipos solamente, y no los que sigues, por ejemplo, <code>/scoreboard itsur</code>.
 <a href="/seguir">/seguir</a> - Comienza a seguir equipos cuyo nombre tengan la subcadena que especifiques, te notificaremos cuando estos equipos resuelvan un problema. Por ejemplo, <code>/seguir Culiacan</code>.
 <a href="/dejar">/dejar</a> - Úsalo cuando quieras dejar de seguir a algunos equipos, sólo da click en la subcadena que quieras dejar de seguir.
-'''
+            '''
         )
 
     async def send_developer_message(self, text: str) -> None:
@@ -173,6 +179,6 @@ class TelegramNotifier:
             f"<pre>{html.escape(tb_string)}</pre>"
         )
         if len(message) > _MESSAGE_SIZE_LIMIT:
-            message = message[:_MESSAGE_SIZE_LIMIT-3] + "..."
+            message = message[:_MESSAGE_SIZE_LIMIT - 3] + "..."
 
         await self.send_developer_message(message)

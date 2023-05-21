@@ -6,7 +6,7 @@
 
 - Install all required dependencies:
 ```shell
-sudo apt-get install libffi-dev build-essential
+sudo apt-get install libffi-dev build-essential default-libmysqlclient-dev
 asdf plugin add python
 asdf install
 pip install -r requirements.txt

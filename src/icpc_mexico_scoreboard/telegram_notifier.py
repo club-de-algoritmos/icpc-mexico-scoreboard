@@ -2,16 +2,17 @@ import asyncio
 import html
 import json
 import logging
-import os
 import traceback
 from dataclasses import dataclass
 from typing import Optional, Callable, Awaitable, List, Any
 
+import environ
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
 
 logger = logging.getLogger(__name__)
+env = environ.Env()
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,7 @@ _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _ShowFollowingCallback = Callable[[TelegramUser], Awaitable[None]]
 _StopFollowingCallback = Callable[[TelegramUser, str], Awaitable[None]]
 
-_DEVELOPER_CHAT_ID = int(os.environ["ICPC_MX_TELEGRAM_DEVELOPER_CHAT_ID"])
+_DEVELOPER_CHAT_ID = int(env("TELEGRAM_DEVELOPER_CHAT_ID"))
 _MESSAGE_SIZE_LIMIT = 4096
 
 
@@ -56,7 +57,7 @@ class TelegramNotifier:
                             stop_following_callback: _StopFollowingCallback,
                             ) -> None:
 
-        token = os.environ["ICPC_MX_TELEGRAM_BOT_TOKEN"]
+        token = env("TELEGRAM_BOT_TOKEN")
         self._app = Application.builder().token(token).build()
 
         self._app.add_handler(CommandHandler("top", self._get_top))

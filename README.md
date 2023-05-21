@@ -2,11 +2,12 @@
 
 ## Installation
 
-- Install `asdf`.
+- Install `asdf` ([steps](https://asdf-vm.com/guide/getting-started.html)).
 
 - Install all required dependencies:
 ```shell
-sudo apt-get install libffi-dev
+sudo apt-get install libffi-dev build-essential
+asdf plugin add python
 asdf install
 pip install -r requirements.txt
 ```

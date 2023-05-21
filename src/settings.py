@@ -1,16 +1,21 @@
 import os
 
+import environ
+
+
+env = environ.Env()
+environ.Env.read_env()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "icpc_mexico_scoreboard",
-        "USER": "scoreboard",
-        "PASSWORD": "let-me-in",
-        "HOST": "localhost",
-        "PORT": "5432",
+        "HOST": env("DATABASE_HOST"),
+        "PORT": env("DATABASE_PORT"),
+        "NAME": env("DATABASE_NAME"),
+        "USER": env("DATABASE_USER"),
+        "PASSWORD": env("DATABASE_PASSWORD"),
     }
 }
 
@@ -20,4 +25,4 @@ INSTALLED_APPS = (
     "icpc_mexico_scoreboard.db",
 )
 
-SECRET_KEY = "c4c4&6aw+(5&cg^_!05r(&7_#dghg_pdgopq(yk)xa^bog7j)^*j"
+SECRET_KEY = env("SECRET_KEY")

@@ -25,6 +25,11 @@ CREATE USER 'scoreboard'@'localhost' IDENTIFIED BY 'let-me-in';
 GRANT ALL PRIVILEGES ON icpc_mexico_scoreboard.* TO 'scoreboard'@'localhost';
 ```
 
+- Copy the environment variables and customize them as needed:
+```shell
+cp src/dev.env src/.env
+```
+
 - Apply all database migrations:
 ```shell
 python manage.py migrate

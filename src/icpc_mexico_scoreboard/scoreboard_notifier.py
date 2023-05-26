@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 _SCOREBOARD_RELEASE_TIMEOUT = timedelta(days=5)
 
+_SCOREBOARD_PRE_START_TIME = timedelta(hours=2)
+
 
 def _format_code(code: str) -> str:
     return f"<code>{html.escape(code)}</code>"
@@ -41,8 +43,31 @@ async def _get_users_with_subscriptions() -> List[ScoreboardUser]:
     return await _query_to_list(ScoreboardUser.objects.filter(pk__in=user_ids))
 
 
-async def _get_current_contest() -> Optional[Contest]:
+async def _get_last_contest() -> Optional[Contest]:
     return await Contest.objects.filter(starts_at__lte=datetime.utcnow()).order_by("starts_at").alast()
+
+
+async def _get_next_contest() -> Optional[Contest]:
+    return await Contest.objects.filter(starts_at__gt=datetime.utcnow()).order_by("starts_at").afirst()
+
+
+async def _get_current_contest() -> Optional[Contest]:
+    last_contest = await _get_last_contest()
+    next_contest = await _get_next_contest()
+    if last_contest:
+        if not ScoreboardStatus.is_finished(last_contest):
+            return last_contest
+        if next_contest and next_contest.starts_at < datetime.utcnow() + _SCOREBOARD_PRE_START_TIME:
+            # Last contest has finished (whatever state) and the next one is about to start, so use that instead
+            return next_contest
+        if last_contest.scoreboard_status == ScoreboardStatus.ARCHIVED:
+            # Makes no sense to return an archived context, so return whatever is next, even is there is none
+            return next_contest
+        # The last contest is finished, but we may still need to release it, or users may want to query it
+        return last_contest
+
+    # Just return what's next as there is nothing behind us
+    return next_contest
 
 
 class ScoreboardNotifier:
@@ -77,11 +102,7 @@ class ScoreboardNotifier:
     async def _parse_current_scoreboard(self) -> None:
         contest = await _get_current_contest()
         if not contest:
-            logger.info("No contest is actively running")
-            return
-
-        if contest.scoreboard_status == ScoreboardStatus.ARCHIVED:
-            # Nothing to do because it was archived
+            logger.info("No contest is actively running or soon to run")
             return
 
         if contest.scoreboard_status == ScoreboardStatus.RELEASED:
@@ -89,30 +110,34 @@ class ScoreboardNotifier:
             # TODO: Return here when the scoreboard can be obtained from the DB
             pass
 
-        # The contest is either running or finished, but it hasn't been released
         now = datetime.utcnow()
-
-        # Expire the contest if it ended a long time ago as it was never released
-        if contest.ends_at + _SCOREBOARD_RELEASE_TIMEOUT < now:
-            if contest.scoreboard_status != ScoreboardStatus.RELEASED:
-                contest.scoreboard_status = ScoreboardStatus.RELEASED
-                await contest.asave()
-                await self._telegram.send_developer_message(
-                    f"El concurso <i>{contest.name}</i> terminó hace más de 5 días "
-                    f"y su scoreboard no ha sido liberado, por lo que ha expirado y ya no será leído")
-        elif contest.freezes_at > now:  # Not yet frozen
+        if contest.starts_at > now:
+            # The contest has not started, do nothing yet
+            pass
+        elif contest.freezes_at > now:
+            # Not yet frozen
             if contest.scoreboard_status != ScoreboardStatus.VISIBLE:
                 contest.scoreboard_status = ScoreboardStatus.VISIBLE
                 await contest.asave()
                 await self._notify_all_subscribed_users(f"El concurso <i>{contest.name}</i> ha iniciado")
-        elif contest.ends_at > now:  # Not yet finished
+        elif contest.ends_at > now:
+            # Not yet finished
             if contest.scoreboard_status != ScoreboardStatus.FROZEN:
                 contest.scoreboard_status = ScoreboardStatus.FROZEN
                 await contest.asave()
                 await self._notify_all_subscribed_users(
                     f"El concurso <i>{contest.name}</i> se ha congelado, "
                     f"pero algunos envíos pueden estar pendientes de evaluarse")
+        elif contest.ends_at + _SCOREBOARD_RELEASE_TIMEOUT < now:
+            # Expire the contest if it ended a long time ago as it was never released
+            if contest.scoreboard_status != ScoreboardStatus.RELEASED:
+                contest.scoreboard_status = ScoreboardStatus.RELEASED
+                await contest.asave()
+                await self._telegram.send_developer_message(
+                    f"El concurso <i>{contest.name}</i> terminó hace más de 5 días "
+                    f"y su scoreboard no ha sido liberado, por lo que ha expirado y ya no será leído")
         elif not ScoreboardStatus.is_finished(contest.scoreboard_status):
+            # The contest finished, but it hasn't expired, so wait for it to be released
             contest.scoreboard_status = ScoreboardStatus.WAITING_TO_BE_RELEASED
             await contest.asave()
             await self._notify_all_subscribed_users(

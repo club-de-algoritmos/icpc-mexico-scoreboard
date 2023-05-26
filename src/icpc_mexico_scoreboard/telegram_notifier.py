@@ -60,6 +60,7 @@ class TelegramNotifier:
         token = env("TELEGRAM_BOT_TOKEN")
         self._app = Application.builder().token(token).build()
 
+        # TODO: Add /status
         self._app.add_handler(CommandHandler("top", self._get_top))
         self._app.add_handler(CommandHandler("scoreboard", self._get_scoreboard))
         self._app.add_handler(CommandHandler("seguir", self._follow))

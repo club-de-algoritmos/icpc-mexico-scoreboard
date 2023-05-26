@@ -43,11 +43,6 @@ async def _get_users_with_subscriptions() -> List[ScoreboardUser]:
 
 async def _get_current_contest() -> Optional[Contest]:
     return await Contest.objects.filter(starts_at__lte=datetime.utcnow()).order_by("starts_at").alast()
-    #return Contest(name="Primera Fecha - ICPC Mexico 2023",
-    #               scoreboard_url="https://score.icpcmexico.org",
-    #               starts_at=datetime(2023, 5, 13, 20, 0, 0),
-    #               freezes_at=datetime(2023, 5, 14, 0, 0, 0),
-    #               ends_at=datetime(2023, 5, 14, 1, 0, 0))
 
 
 class ScoreboardNotifier:
@@ -71,67 +66,83 @@ class ScoreboardNotifier:
     async def _start_parsing_scoreboards(self) -> None:
         logger.debug("Starting to parse scoreboards")
         while True:
-            contest = await _get_current_contest()
-            if not contest:
-                logger.info("No contest is actively running")
-                await asyncio.sleep(60)
-                continue
+            try:
+                await self._parse_current_scoreboard()
+            except RuntimeError as e:
+                logging.exception("Unexpected error")
+                await self._notify_error(str(e))
 
-            if contest.scoreboard_status == ScoreboardStatus.RELEASED:
-                # Makes no sense to parse the scoreboard because it cannot change after its release
-                await asyncio.sleep(60)
-                continue
+            await asyncio.sleep(60)
 
-            # The contest is either running or finished, but it hasn't been released
-            now = datetime.utcnow()
+    async def _parse_current_scoreboard(self) -> None:
+        contest = await _get_current_contest()
+        if not contest:
+            logger.info("No contest is actively running")
+            return
 
-            # Expire the contest if it ended a long time ago as it was never released
-            if contest.ends_at + _SCOREBOARD_RELEASE_TIMEOUT < now:
+        if contest.scoreboard_status == ScoreboardStatus.RELEASED:
+            # Makes no sense to parse the scoreboard because it cannot change after its release
+            # TODO: Return here when the scoreboard can be obtained from the DB
+            pass
+
+        # The contest is either running or finished, but it hasn't been released
+        now = datetime.utcnow()
+
+        # Expire the contest if it ended a long time ago as it was never released
+        if contest.ends_at + _SCOREBOARD_RELEASE_TIMEOUT < now:
+            if contest.scoreboard_status != ScoreboardStatus.RELEASED:
                 contest.scoreboard_status = ScoreboardStatus.RELEASED
                 await contest.asave()
                 await self._telegram.send_developer_message(
                     f"El concurso <i>{contest.name}</i> terminó hace más de 5 días "
                     f"y su scoreboard no ha sido liberado, por lo que ha expirado y ya no será leído")
-                continue
+        elif contest.freezes_at > now:  # Not yet frozen
+            if contest.scoreboard_status != ScoreboardStatus.VISIBLE:
+                contest.scoreboard_status = ScoreboardStatus.VISIBLE
+                await contest.asave()
+                await self._notify_all_subscribed_users(f"El concurso <i>{contest.name}</i> ha iniciado")
+        elif contest.ends_at > now:  # Not yet finished
+            if contest.scoreboard_status != ScoreboardStatus.FROZEN:
+                contest.scoreboard_status = ScoreboardStatus.FROZEN
+                await contest.asave()
+                await self._notify_all_subscribed_users(
+                    f"El concurso <i>{contest.name}</i> se ha congelado, "
+                    f"pero algunos envíos pueden estar pendientes de evaluarse")
+        elif contest.scoreboard_status not in [
+            ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED
+        ]:
+            contest.scoreboard_status = ScoreboardStatus.WAITING_TO_BE_RELEASED
+            await contest.asave()
+            await self._notify_all_subscribed_users(
+                f"El concurso <i>{contest.name}</i> ha terminado y, "
+                f"cuando los resultados finales se liberen, serás notificado del scoreboard final")
 
-            if contest.freezes_at > now:  # Not yet frozen
-                if contest.scoreboard_status != ScoreboardStatus.VISIBLE:
-                    contest.scoreboard_status = ScoreboardStatus.VISIBLE
-                    await contest.asave()
-                    await self._notify_all_subscribed_users(f"El concurso <i>{contest.name}</i> ha iniciado")
-            elif contest.ends_at > now:  # Not yet finished
-                if contest.scoreboard_status != ScoreboardStatus.FROZEN:
-                    contest.scoreboard_status = ScoreboardStatus.FROZEN
-                    await contest.asave()
-                    await self._notify_all_subscribed_users(
-                        f"El concurso <i>{contest.name}</i> se ha congelado, "
-                        f"pero algunos envíos pueden estar pendientes de evaluarse")
-            else:  # Finished (released or not)
-                if contest.scoreboard_status not in [
-                    ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED
-                ]:
-                    contest.scoreboard_status = ScoreboardStatus.WAITING_TO_BE_RELEASED
-                    await contest.asave()
-                    await self._notify_all_subscribed_users(
-                        f"El concurso <i>{contest.name}</i> ha terminado y, "
-                        f"cuando los resultados finales se liberen, serás notificado del scoreboard final")
+        logger.debug(f"Parsing the scoreboard of contest {contest.name}")
+        try:
+            scoreboard = parse_boca_scoreboard(contest.scoreboard_url)
+        except NotAScoreboardError:
+            logger.info(f"El concurso {contest.name} no ha iniciado")
+            scoreboard = None
 
-            logger.debug(f"Parsing the scoreboard of contest {contest.name}")
-            # TODO: Move scoreboard status to RELEASED when applicable
-            try:
-                scoreboard = parse_boca_scoreboard(contest.scoreboard_url)
-                # TODO: Store scoreboard in DB
-                self._previous_scoreboard = self._scoreboard
-                self._scoreboard = scoreboard
-                await self._notify_rank_updates()
-            except NotAScoreboardError:
-                logger.info(f"El concurso {contest.name} no ha iniciado")
-            except Exception as e:
-                logging.exception("Unexpected error")
-                await self._notify_error(str(e))
+        if not scoreboard:
+            self._previous_scoreboard = None
+            self._scoreboard = None
+            if contest.scoreboard_status == ScoreboardStatus.WAITING_TO_BE_RELEASED:
+                # There is no scoreboard so it must have been released
+                contest.scoreboard_status = ScoreboardStatus.RELEASED
+                await contest.asave()
+            return
 
-            previous_contest = contest
-            await asyncio.sleep(60)
+        # TODO: Store scoreboard in DB
+        self._previous_scoreboard = self._scoreboard
+        self._scoreboard = scoreboard
+        if (contest.scoreboard_status == ScoreboardStatus.WAITING_TO_BE_RELEASED
+                and self._previous_scoreboard != self._scoreboard):
+            # A scoreboard change means it was released
+            contest.scoreboard_status = ScoreboardStatus.RELEASED
+            await contest.asave()
+
+        await self._notify_rank_updates(contest)
 
     async def stop_running(self) -> None:
         await self._telegram.stop_running()
@@ -212,10 +223,6 @@ class ScoreboardNotifier:
     async def _notify_error(self, error: str) -> None:
         await self._telegram.send_developer_message(f"Got unexpected error: {_format_code(error)}")
 
-    async def _notify_info(self, info: str) -> None:
-        logger.info(info)
-        await self._telegram.send_developer_message(info)
-
     def _filter_teams(
             self,
             scoreboard: Optional[ParsedBocaScoreboard],
@@ -266,14 +273,19 @@ class ScoreboardNotifier:
             return f"1 problema {solved_names}"
         return f"{solved} problemas {solved_names}"
 
-    def _get_rank_update(self, old_teams: List[ParsedBocaScoreboardTeam], new_teams: List[ParsedBocaScoreboardTeam]
-                         ) -> str:
+    def _get_rank_update(
+            self,
+            old_teams: List[ParsedBocaScoreboardTeam],
+            new_teams: List[ParsedBocaScoreboardTeam],
+            contest: Contest,
+    ) -> str:
         teams: Dict[str, ParsedBocaScoreboardTeam] = {t.name: t for t in old_teams}
         updates = []
         for new_team in new_teams:
             if new_team.name not in teams:
-                # TODO: Re-work to account for server restarts
-                updates.append(f"El equipo {_format_code(new_team.name)} apareció en el scoreboard")
+                if contest.scoreboard_status not in [
+                        ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED]:
+                    updates.append(f"El equipo {_format_code(new_team.name)} apareció en el scoreboard")
                 continue
 
             old_team = teams[new_team.name]
@@ -288,13 +300,13 @@ class ScoreboardNotifier:
 
         return "\n".join(updates)
 
-    async def _notify_rank_updates(self) -> None:
+    async def _notify_rank_updates(self, contest: Contest) -> None:
         # TODO: Improve performance
         for user in await _get_users_with_subscriptions():
             subscriptions = await _get_user_subscriptions(user)
             previous_teams = self._filter_teams(self._previous_scoreboard, subscriptions)
             teams = self._filter_teams(self._scoreboard, subscriptions)
-            rank_update = self._get_rank_update(previous_teams, teams)
+            rank_update = self._get_rank_update(previous_teams, teams, contest)
             if rank_update:
                 await self._telegram.send_message(rank_update, user.telegram_chat_id)
 

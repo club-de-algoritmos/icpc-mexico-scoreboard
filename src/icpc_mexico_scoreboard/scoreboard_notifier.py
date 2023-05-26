@@ -1,6 +1,7 @@
 import asyncio
 import html
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import List, Dict, Set, Optional, Iterable
 
@@ -20,6 +21,41 @@ _SCOREBOARD_PRE_START_TIME = timedelta(hours=2)
 
 def _format_code(code: str) -> str:
     return f"<code>{html.escape(code)}</code>"
+
+
+def _get_time_delta_as_human(before: datetime, after: datetime) -> str:
+    if before >= after:
+        return "0 minutos"
+
+    seconds_from_now = (after - before).total_seconds()
+    minutes = math.ceil(seconds_from_now / 60)
+    if minutes < 60:
+        if minutes == 1:
+            return "1 minuto"
+        return f"{minutes} minutos"
+
+    hours = round(minutes / 60)
+    if hours < 24:
+        if hours == 1:
+            return "1 hora"
+        return f"{hours} horas"
+
+    days = round(hours / 24)
+    if days < 30:
+        if days == 1:
+            return "1 día"
+        return f"{days} días"
+
+    months = round(days / 30)
+    if months < 12:
+        if months == 1:
+            return "1 mes"
+        return f"{months} meses"
+
+    years = round(months / 12)
+    if years == 1:
+        return "1 año"
+    return f"{years} años"
 
 
 async def _query_to_list(queryset: QuerySet) -> List:
@@ -80,6 +116,7 @@ class ScoreboardNotifier:
         logger.debug("Starting up")
         self._telegram = TelegramNotifier()
         await self._telegram.start_running(
+            _get_status_callback=self._get_status,
             get_top_callback=self._get_top,
             get_scoreboard_callback=self._get_scoreboard,
             follow_callback=self._follow,
@@ -188,6 +225,50 @@ class ScoreboardNotifier:
 
         return False
 
+    async def _get_status(self, telegram_user: TelegramUser) -> None:
+        agenda = await self._compute_status()
+        await self._telegram.send_message(agenda, chat_id=telegram_user.chat_id)
+
+    async def _compute_status(self) -> str:
+        last_contest = await _get_last_contest()
+        now = datetime.utcnow()
+        next_contest = await _get_next_contest()
+        if (next_contest and (
+                next_contest.starts_at < datetime.utcnow() + _SCOREBOARD_PRE_START_TIME
+                or (last_contest and last_contest.scoreboard_status == ScoreboardStatus.ARCHIVED)
+        )):
+            time_to_start = _get_time_delta_as_human(now, next_contest.starts_at)
+            return (f"El concurso <i>{next_contest.name}</i> iniciará en {time_to_start}.\n"
+                    f"Podrás ver su scoreboard completo <a href='{next_contest.scoreboard_url}'>aquí</a>, "
+                    f"o usando este bot (mira <a href='/ayuda'>/ayuda</a> para saber cómo).")
+
+        last_contest_desc = None
+        if last_contest:
+            time_to_freeze = _get_time_delta_as_human(now, last_contest.freezes_at)
+            time_to_end = _get_time_delta_as_human(now, last_contest.ends_at)
+            time_after_end = _get_time_delta_as_human(last_contest.ends_at, now)
+
+            last_contest_desc = f"El concurso <i>{last_contest.name}</i> "
+            if last_contest.scoreboard_status == ScoreboardStatus.VISIBLE:
+                last_contest_desc += (f"está corriendo, su scoreboard se congelará en {time_to_freeze} y "
+                                      f"terminará en {time_to_end}")
+            elif last_contest.scoreboard_status == ScoreboardStatus.FROZEN:
+                last_contest_desc += f"está congelado y terminará en {time_to_end}"
+            elif last_contest.scoreboard_status == ScoreboardStatus.WAITING_TO_BE_RELEASED:
+                last_contest_desc += f"terminó hace {time_after_end} pero parece que sus resultados no son finales"
+            elif last_contest.scoreboard_status in [ScoreboardStatus.RELEASED, ScoreboardStatus.ARCHIVED]:
+                last_contest_desc += f"terminó hace {time_after_end} y sus resultados son finales"
+            else:
+                last_contest_desc = None
+                logger.error(f"Contest {last_contest.name} has an unexpected status {last_contest.scoreboard_status}")
+
+        if not last_contest_desc:
+            return "¡No hay concursos agendados!"
+
+        return (f"{last_contest_desc}.\n"
+                f"Puedes ver su scoreboard completo <a href='{next_contest.scoreboard_url}'>aquí</a>, "
+                f"o usando este bot (mira <a href='/ayuda'>/ayuda</a> para saber cómo).")
+
     async def _get_top(self, telegram_user: TelegramUser, top_n: Optional[int]) -> None:
         if await self._notify_if_no_scoreboard(telegram_user):
             return
@@ -295,7 +376,8 @@ class ScoreboardNotifier:
         if not solved:
             return ""
 
-        solved_names = self._solved_as_str(self._get_solved_names(new_team).difference(self._get_solved_names(old_team)))
+        solved_names = self._solved_as_str(
+            self._get_solved_names(new_team).difference(self._get_solved_names(old_team)))
         if solved == 1:
             return f"1 problema {solved_names}"
         return f"{solved} problemas {solved_names}"
@@ -311,7 +393,7 @@ class ScoreboardNotifier:
         for new_team in new_teams:
             if new_team.name not in teams:
                 if contest.scoreboard_status not in [
-                        ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED]:
+                    ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED]:
                     updates.append(f"El equipo {_format_code(new_team.name)} apareció en el scoreboard")
                 continue
 

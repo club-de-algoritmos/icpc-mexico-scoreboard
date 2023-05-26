@@ -24,6 +24,7 @@ class TelegramUser:
         return TelegramUser(chat_id=update.effective_chat.id)
 
 
+_GetStatusCallback = Callable[[TelegramUser], Awaitable[None]]
 _GetTopCallback = Callable[[TelegramUser, Optional[int]], Awaitable[None]]
 _GetScoreboardCallback = Callable[[TelegramUser, Optional[str]], Awaitable[None]]
 _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
@@ -43,6 +44,7 @@ def _get_command_args(message: str) -> Optional[str]:
 
 class TelegramNotifier:
     _app: Optional[Application]
+    _get_status_callback: Optional[_GetStatusCallback]
     _get_top_callback: Optional[_GetTopCallback]
     _get_scoreboard_callback: Optional[_GetScoreboardCallback]
     _follow_callback: Optional[_FollowCallback]
@@ -50,6 +52,7 @@ class TelegramNotifier:
     _stop_following_callback: Optional[_StopFollowingCallback]
 
     async def start_running(self,
+                            _get_status_callback: _GetStatusCallback,
                             get_top_callback: _GetTopCallback,
                             get_scoreboard_callback: _GetScoreboardCallback,
                             follow_callback: _FollowCallback,
@@ -60,16 +63,18 @@ class TelegramNotifier:
         token = env("TELEGRAM_BOT_TOKEN")
         self._app = Application.builder().token(token).build()
 
-        # TODO: Add /status
+        self._app.add_handler(CommandHandler("estado", self._get_status))
         self._app.add_handler(CommandHandler("top", self._get_top))
         self._app.add_handler(CommandHandler("scoreboard", self._get_scoreboard))
         self._app.add_handler(CommandHandler("seguir", self._follow))
         self._app.add_handler(CommandHandler("dejar", self._show_following))
         self._app.add_handler(CallbackQueryHandler(self._stop_following))
         self._app.add_handler(CommandHandler("ayuda", self._help))
+        # TODO: Add /reportar
         self._app.add_handler(CommandHandler("start", self._start))
         self._app.add_error_handler(self._handle_error)
 
+        self._get_status_callback = _get_status_callback
         self._get_top_callback = get_top_callback
         self._get_scoreboard_callback = get_scoreboard_callback
         self._follow_callback = follow_callback
@@ -78,6 +83,7 @@ class TelegramNotifier:
 
         await self._app.initialize()
         commands = [
+            BotCommand("estado", "Entérate del estado actual del scoreboard"),
             BotCommand("top", "Entérate del top del scoreboard"),
             BotCommand("scoreboard", "Entérate del scoreboard de tus equipos"),
             BotCommand("seguir", "Comienza a seguir equipos"),
@@ -93,6 +99,9 @@ class TelegramNotifier:
     async def stop_running(self) -> None:
         if self._app:
             await self._app.shutdown()
+
+    async def _get_status(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._get_status_callback(TelegramUser.from_update(update))
 
     async def _get_top(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         top_n_text = _get_command_args(update.message.text)
@@ -146,6 +155,7 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
     async def _help(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(
             '''
+<a href="/estado">/estado</a> - Entérate del estado actual del scoreboard.
 <a href="/top">/top</a> - Entérate del top 10 del scoreboard, agrega un entero para especificar cuántos equipos quieres ver. Por ejemplo, <code>/top 5</code>.
 <a href="/scoreboard">/scoreboard</a> - Entérate del scoreboard filtrado por los equipos que estás siguiendo. Especifica una subcdena si quieres saber sobre algunos equipos solamente, y no los que sigues, por ejemplo, <code>/scoreboard itsur</code>.
 <a href="/seguir">/seguir</a> - Comienza a seguir equipos cuyo nombre tengan la subcadena que especifiques, te notificaremos cuando estos equipos resuelvan un problema. Por ejemplo, <code>/seguir Culiacan</code>.

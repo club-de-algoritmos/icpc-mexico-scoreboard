@@ -10,6 +10,11 @@ class ScoreboardStatus(models.TextChoices):
     FROZEN = "frozen"
     WAITING_TO_BE_RELEASED = "waiting_to_be_released"
     RELEASED = "released"
+    ARCHIVED = "archived"
+
+    @staticmethod
+    def is_finished(status) -> bool:
+        return status in [ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED, ScoreboardStatus.ARCHIVED]
 
 
 class Contest(models.Model):

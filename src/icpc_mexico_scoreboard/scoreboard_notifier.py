@@ -80,6 +80,10 @@ class ScoreboardNotifier:
             logger.info("No contest is actively running")
             return
 
+        if contest.scoreboard_status == ScoreboardStatus.ARCHIVED:
+            # Nothing to do because it was archived
+            return
+
         if contest.scoreboard_status == ScoreboardStatus.RELEASED:
             # Makes no sense to parse the scoreboard because it cannot change after its release
             # TODO: Return here when the scoreboard can be obtained from the DB
@@ -108,9 +112,7 @@ class ScoreboardNotifier:
                 await self._notify_all_subscribed_users(
                     f"El concurso <i>{contest.name}</i> se ha congelado, "
                     f"pero algunos envíos pueden estar pendientes de evaluarse")
-        elif contest.scoreboard_status not in [
-            ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED
-        ]:
+        elif not ScoreboardStatus.is_finished(contest.scoreboard_status):
             contest.scoreboard_status = ScoreboardStatus.WAITING_TO_BE_RELEASED
             await contest.asave()
             await self._notify_all_subscribed_users(
@@ -127,9 +129,9 @@ class ScoreboardNotifier:
         if not scoreboard:
             self._previous_scoreboard = None
             self._scoreboard = None
-            if contest.scoreboard_status == ScoreboardStatus.WAITING_TO_BE_RELEASED:
-                # There is no scoreboard so it must have been released
-                contest.scoreboard_status = ScoreboardStatus.RELEASED
+            if ScoreboardStatus.is_finished(contest.scoreboard_status):
+                # There is no scoreboard so it must have been archived
+                contest.scoreboard_status = ScoreboardStatus.ARCHIVED
                 await contest.asave()
             return
 

@@ -179,6 +179,10 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
         await self.send_message(text, _DEVELOPER_CHAT_ID)
 
     async def send_message(self, text: str, chat_id: int) -> None:
+        if len(text) > _MESSAGE_SIZE_LIMIT:
+            logger.debug(f"Shortening long message from {len(text)} to {_MESSAGE_SIZE_LIMIT} characters")
+            text = f"{text[:_MESSAGE_SIZE_LIMIT - 3]}..."
+
         try:
             await self._app.bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
         except telegram.error.Forbidden:
@@ -205,7 +209,4 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
             f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
             f"<pre>{html.escape(tb_string)}</pre>"
         )
-        if len(message) > _MESSAGE_SIZE_LIMIT:
-            message = message[:_MESSAGE_SIZE_LIMIT - 3] + "..."
-
         await self.send_developer_message(message)

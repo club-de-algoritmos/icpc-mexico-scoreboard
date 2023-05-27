@@ -266,7 +266,7 @@ class ScoreboardNotifier:
             return "¡No hay concursos agendados!"
 
         return (f"{last_contest_desc}.\n"
-                f"Puedes ver su scoreboard completo <a href='{next_contest.scoreboard_url}'>aquí</a>, "
+                f"Puedes ver su scoreboard completo <a href='{last_contest.scoreboard_url}'>aquí</a>, "
                 f"o usando este bot (mira <a href='/ayuda'>/ayuda</a> para saber cómo).")
 
     async def _get_top(self, telegram_user: TelegramUser, top_n: Optional[int]) -> None:

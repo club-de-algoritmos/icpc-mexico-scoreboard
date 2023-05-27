@@ -95,6 +95,7 @@ class TelegramNotifier:
             BotCommand("scoreboard", "Entérate del scoreboard de tus equipos"),
             BotCommand("seguir", "Comienza a seguir equipos"),
             BotCommand("dejar", "Deja de seguir equipos"),
+            BotCommand("alto", "Detén todas las notificaciones"),
             BotCommand("ayuda", "Muestra la ayuda sobre los comandos"),
         ]
         await self._app.bot.set_my_commands(commands)

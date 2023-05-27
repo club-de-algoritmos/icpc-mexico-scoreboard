@@ -75,7 +75,7 @@ async def _delete_user(user: ScoreboardUser) -> None:
     deleted_subscriptions, _ = await ScoreboardSubscription.objects.filter(user=user).adelete()
     logger.debug(f"Deleted {deleted_subscriptions} subscriptions of user {user.pk}")
     await user.adelete()
-    logger.debug(f"Deleted user {user.pk}")
+    logger.debug(f"Deleted user with chat ID {user.telegram_chat_id}")
 
 
 async def _get_user_subscriptions(user: ScoreboardUser) -> List[str]:
@@ -384,15 +384,17 @@ class ScoreboardNotifier:
         return "\n".join(map(get_rank, sorted_teams))
 
     def _get_solved_diff_summary(self, old_team: ParsedBocaScoreboardTeam, new_team: ParsedBocaScoreboardTeam) -> str:
-        solved = new_team.total_solved - old_team.total_solved
-        if not solved:
-            return ""
+        solved_problems = self._get_solved_names(new_team).difference(self._get_solved_names(old_team))
+        solved_names = self._solved_as_str(solved_problems)
+        if not solved_problems:
+            return ''
 
-        solved_names = self._solved_as_str(
-            self._get_solved_names(new_team).difference(self._get_solved_names(old_team)))
-        if solved == 1:
-            return f"1 problema {solved_names}"
-        return f"{solved} problemas {solved_names}"
+        if len(solved_problems) == 1:
+            (problem,) = solved_problems
+            desc = f"el problema {problem}"
+        else:
+            desc = f"{len(solved_problems)} problemas {solved_names}"
+        return f"{desc}, llegando a un total de <b>{new_team.total_solved}</b> problemas resueltos"
 
     def _get_rank_update(
             self,
@@ -413,7 +415,7 @@ class ScoreboardNotifier:
             old_team = teams[new_team.name]
             solved_diff_summary = self._get_solved_diff_summary(old_team, new_team)
             if solved_diff_summary:
-                update = f"El equipo {_format_code(new_team.name)} resolvió {solved_diff_summary}, "
+                update = f"El equipo {_format_code(new_team.name)} resolvió {solved_diff_summary}, y "
                 if old_team.place == new_team.place:
                     update += f"quedándose en el mismo lugar <b>#{old_team.place}</b>"
                 else:

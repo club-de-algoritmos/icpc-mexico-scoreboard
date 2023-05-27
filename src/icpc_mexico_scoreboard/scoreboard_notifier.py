@@ -402,10 +402,11 @@ class ScoreboardNotifier:
     ) -> str:
         teams: Dict[str, ParsedBocaScoreboardTeam] = {t.name: t for t in old_teams}
         updates = []
+        now = datetime.utcnow()
         for new_team in new_teams:
             if new_team.name not in teams:
-                if contest.scoreboard_status not in [
-                        ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED]:
+                if old_teams or contest.starts_at >= now - timedelta(minutes=15):
+                    # Only notify of appearance when there were previous parsings (old_teams) or the contest just begun
                     updates.append(f"El equipo {_format_code(new_team.name)} apareció en el scoreboard")
                 continue
 

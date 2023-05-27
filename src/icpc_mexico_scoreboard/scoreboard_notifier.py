@@ -67,6 +67,17 @@ async def _get_or_create_user(telegram_chat_id: int) -> ScoreboardUser:
     return user
 
 
+async def _get_user(telegram_chat_id: int) -> Optional[ScoreboardUser]:
+    return await ScoreboardUser.objects.filter(telegram_chat_id=telegram_chat_id).afirst()
+
+
+async def _delete_user(user: ScoreboardUser) -> None:
+    deleted_subscriptions, _ = await ScoreboardSubscription.objects.filter(user=user).adelete()
+    logger.debug(f"Deleted {deleted_subscriptions} subscriptions of user {user.pk}")
+    await user.adelete()
+    logger.debug(f"Deleted user {user.pk}")
+
+
 async def _get_user_subscriptions(user: ScoreboardUser) -> List[str]:
     return sorted(
         await _query_to_list(
@@ -122,6 +133,7 @@ class ScoreboardNotifier:
             follow_callback=self._follow,
             show_following_callback=self._show_following,
             stop_following_callback=self._stop_following,
+            stop_all_callback=self._stop_all,
         )
         await self._start_parsing_scoreboards()
 
@@ -393,7 +405,7 @@ class ScoreboardNotifier:
         for new_team in new_teams:
             if new_team.name not in teams:
                 if contest.scoreboard_status not in [
-                    ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED]:
+                        ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED]:
                     updates.append(f"El equipo {_format_code(new_team.name)} apareció en el scoreboard")
                 continue
 
@@ -422,3 +434,9 @@ class ScoreboardNotifier:
     async def _notify_all_subscribed_users(self, message: str) -> None:
         for user in await _get_users_with_subscriptions():
             await self._telegram.send_message(message, user.telegram_chat_id)
+
+    async def _stop_all(self, telegram_user: TelegramUser) -> None:
+        logger.debug(f'Stopping all notifications to user with chat ID {telegram_user.chat_id}')
+        user = await _get_user(telegram_user.chat_id)
+        if user:
+            await _delete_user(user)

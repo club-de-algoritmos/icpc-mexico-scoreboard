@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Optional, Callable, Awaitable, List, Any
 
 import environ
+import telegram.error
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
@@ -30,6 +31,7 @@ _GetScoreboardCallback = Callable[[TelegramUser, Optional[str]], Awaitable[None]
 _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _ShowFollowingCallback = Callable[[TelegramUser], Awaitable[None]]
 _StopFollowingCallback = Callable[[TelegramUser, str], Awaitable[None]]
+_StopAllCallback = Callable[[TelegramUser], Awaitable[None]]
 
 _DEVELOPER_CHAT_ID = int(env("TELEGRAM_DEVELOPER_CHAT_ID"))
 _MESSAGE_SIZE_LIMIT = 4096
@@ -50,6 +52,7 @@ class TelegramNotifier:
     _follow_callback: Optional[_FollowCallback]
     _show_following_callback: Optional[_ShowFollowingCallback]
     _stop_following_callback: Optional[_StopFollowingCallback]
+    _stop_all_callback: Optional[_StopAllCallback]
 
     async def start_running(self,
                             _get_status_callback: _GetStatusCallback,
@@ -58,6 +61,7 @@ class TelegramNotifier:
                             follow_callback: _FollowCallback,
                             show_following_callback: _ShowFollowingCallback,
                             stop_following_callback: _StopFollowingCallback,
+                            stop_all_callback: _StopAllCallback,
                             ) -> None:
 
         token = env("TELEGRAM_BOT_TOKEN")
@@ -72,6 +76,8 @@ class TelegramNotifier:
         self._app.add_handler(CommandHandler("ayuda", self._help))
         # TODO: Add /reportar
         self._app.add_handler(CommandHandler("start", self._start))
+        self._app.add_handler(CommandHandler("stop", self._stop_all))
+        self._app.add_handler(CommandHandler("alto", self._stop_all))
         self._app.add_error_handler(self._handle_error)
 
         self._get_status_callback = _get_status_callback
@@ -80,6 +86,7 @@ class TelegramNotifier:
         self._follow_callback = follow_callback
         self._show_following_callback = show_following_callback
         self._stop_following_callback = stop_following_callback
+        self._stop_all_callback = stop_all_callback
 
         await self._app.initialize()
         commands = [
@@ -152,6 +159,9 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
             '''
         )
 
+    async def _stop_all(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._stop_all_callback(TelegramUser.from_update(update))
+
     async def _help(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(
             '''
@@ -160,6 +170,7 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
 <a href="/scoreboard">/scoreboard</a> - Entérate del scoreboard filtrado por los equipos que estás siguiendo. Especifica una subcdena si quieres saber sobre algunos equipos solamente, y no los que sigues, por ejemplo, <code>/scoreboard itsur</code>.
 <a href="/seguir">/seguir</a> - Comienza a seguir equipos cuyo nombre tengan la subcadena que especifiques, te notificaremos cuando estos equipos resuelvan un problema. Por ejemplo, <code>/seguir Culiacan</code>.
 <a href="/dejar">/dejar</a> - Úsalo cuando quieras dejar de seguir a algunos equipos, sólo da click en la subcadena que quieras dejar de seguir.
+<a href="/alto">/alto</a> - Deja de seguir a todos los equipos y evita que el bot te siga notificando.
             '''
         )
 
@@ -169,8 +180,11 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
     async def send_message(self, text: str, chat_id: int) -> None:
         try:
             await self._app.bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
+        except telegram.error.Forbidden:
+            logger.info("User has blocked us, stopping all notifications to them")
+            self._stop_all_callback(TelegramUser(chat_id=chat_id))
         except Exception:
-            logger.exception("Could not send Telegram message",)
+            logger.exception("Could not send Telegram message")
 
     async def _handle_error(self, update: Any, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Log the error and send a telegram message to notify the developer."""

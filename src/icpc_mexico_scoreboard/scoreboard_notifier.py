@@ -270,6 +270,12 @@ class ScoreboardNotifier:
                 last_contest_desc += f"terminó hace {time_after_end} pero parece que sus resultados no son finales"
             elif last_contest.scoreboard_status in [ScoreboardStatus.RELEASED, ScoreboardStatus.ARCHIVED]:
                 last_contest_desc += f"terminó hace {time_after_end} y sus resultados son finales"
+                if next_contest:
+                    time_to_start = _get_time_delta_as_human(now, next_contest.starts_at)
+                    starts_at_date = next_contest.starts_at.strftime("%Y-%m-%d")
+                    last_contest_desc = (f"{last_contest_desc}\n\n"
+                                         f"El siguiente concurso <i>{next_contest.name}</i> "
+                                         f"iniciará en {time_to_start} ({starts_at_date}).")
             else:
                 last_contest_desc = None
                 logger.error(f"Contest {last_contest.name} has an unexpected status {last_contest.scoreboard_status}")

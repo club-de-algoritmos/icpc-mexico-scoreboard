@@ -213,6 +213,7 @@ class ScoreboardNotifier:
         self._previous_scoreboard = self._scoreboard
         self._scoreboard = scoreboard
         if (contest.scoreboard_status == ScoreboardStatus.WAITING_TO_BE_RELEASED
+                and self._previous_scoreboard
                 and self._previous_scoreboard != self._scoreboard):
             # A scoreboard change means it was released
             contest.scoreboard_status = ScoreboardStatus.RELEASED

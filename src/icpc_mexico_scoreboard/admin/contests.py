@@ -20,3 +20,10 @@ def create_contest(
         freezes_at=freezes_at,
         ends_at=ends_at,
     )
+
+
+def shift_contest_time(contest: Contest, shift: timedelta) -> None:
+    contest.starts_at += shift
+    contest.freezes_at += shift
+    contest.ends_at += shift
+    contest.save()

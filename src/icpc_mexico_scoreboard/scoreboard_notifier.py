@@ -218,6 +218,10 @@ class ScoreboardNotifier:
             # A scoreboard change means it was released
             contest.scoreboard_status = ScoreboardStatus.RELEASED
             await contest.asave()
+            await self._notify_all_subscribed_users(
+                f"Los resultados finales del concurso <i>{contest.name}</i> han sido liberados")
+            await self._notify_scoreboard_to_all_users()
+            return
 
         await self._notify_rank_updates(contest)
 
@@ -303,7 +307,7 @@ class ScoreboardNotifier:
             return
 
         if search_text:
-            await self._notify_scoreboard(telegram_user, {search_text})
+            await self._notify_scoreboard(telegram_user.chat_id, {search_text})
             return
 
         user = await _get_or_create_user(telegram_user.chat_id)
@@ -315,7 +319,7 @@ class ScoreboardNotifier:
                                               telegram_user.chat_id)
             return
 
-        await self._notify_scoreboard(telegram_user, subscriptions)
+        await self._notify_scoreboard(telegram_user.chat_id, subscriptions)
 
     async def _follow(self, telegram_user: TelegramUser, follow_text: str) -> None:
         user = await _get_or_create_user(telegram_user.chat_id)
@@ -325,13 +329,19 @@ class ScoreboardNotifier:
             return
 
         # Notify of scoreboard, only for the new subscription
-        await self._notify_scoreboard(telegram_user, {follow_text})
+        await self._notify_scoreboard(telegram_user.chat_id, {follow_text})
 
-    async def _notify_scoreboard(self, telegram_user: TelegramUser, team_query_subscriptions: Iterable[str]) -> None:
+    async def _notify_scoreboard_to_all_users(self) -> None:
+        # TODO: Improve performance
+        for user in await _get_users_with_subscriptions():
+            subscriptions = await _get_user_subscriptions(user)
+            await self._notify_scoreboard(user.telegram_chat_id, subscriptions)
+
+    async def _notify_scoreboard(self, telegram_user_chat_id: int, team_query_subscriptions: Iterable[str]) -> None:
         watched_teams = self._filter_teams(self._scoreboard, team_query_subscriptions)
         current_rank = self._get_current_rank(watched_teams)
         await self._telegram.send_message(current_rank or "Ningún equipo que sigues fué encontrado",
-                                          telegram_user.chat_id)
+                                          telegram_user_chat_id)
 
     async def _show_following(self, telegram_user: TelegramUser) -> None:
         user = await _get_or_create_user(telegram_user.chat_id)

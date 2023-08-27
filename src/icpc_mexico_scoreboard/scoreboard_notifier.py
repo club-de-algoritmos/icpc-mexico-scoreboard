@@ -427,7 +427,7 @@ class ScoreboardNotifier:
         teams = []
         school_team_count = defaultdict(int)
         for team in self._scoreboard.teams:
-            if team.name.lower() in teams_to_ignore:
+            if team.clean_name.lower() in teams_to_ignore or team.is_guest:
                 continue
 
             school_team_count[team.school_name] += 1
@@ -437,7 +437,7 @@ class ScoreboardNotifier:
                     break
 
         team_summaries = "\n".join(map(self._get_team_summary, teams))
-        return f'Los siguientes {len(teams)} se espera que avancen a la siguiente etapa:\n{team_summaries}'
+        return f'Los siguientes {len(teams)} equipos se espera que avancen a la siguiente etapa:\n{team_summaries}'
 
     def _get_solved_diff_summary(self, old_team: ParsedBocaScoreboardTeam, new_team: ParsedBocaScoreboardTeam) -> str:
         solved_problems = self._get_solved_names(new_team).difference(self._get_solved_names(old_team))

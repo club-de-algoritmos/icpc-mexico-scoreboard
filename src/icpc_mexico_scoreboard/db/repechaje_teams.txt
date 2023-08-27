@@ -18,7 +18,7 @@ Mojibake
 Britneys Pelonas
 Solanitos
 team.cpp
-Leones->Code();
+Leones-&gt;Code();
 La mejor remontada
 Silicon Strikers
 !nullptr

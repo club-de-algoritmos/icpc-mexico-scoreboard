@@ -23,6 +23,13 @@ class ParsedBocaScoreboardTeam:
     total_penalty: int
     problems: List[ParsedBocaScoreboardProblem]
 
+    @property
+    def school_name(self) -> str:
+        if self.name.startswith('['):
+            end = self.name.index(']')
+            return self.name[1:end]
+        return ''
+
 
 @dataclass(frozen=True)
 class ParsedBocaScoreboard:

@@ -428,8 +428,8 @@ class ScoreboardNotifier:
             if team.name.lower() in teams_to_ignore:
                 continue
 
-            school_team_count['USE_SCHOOL'] += 1
-            if school_team_count['USE_SCHOOL'] <= max_by_school:
+            school_team_count[team.school_name] += 1
+            if school_team_count[team.school_name] <= max_by_school:
                 teams.append(team)
                 if len(teams) == max_to_advance:
                     break

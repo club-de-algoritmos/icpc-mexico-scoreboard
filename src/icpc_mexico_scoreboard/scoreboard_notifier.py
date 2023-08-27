@@ -25,12 +25,11 @@ def _format_code(code: str) -> str:
     return f"<code>{html.escape(code)}</code>"
 
 
-def _concat_paragraphs(a: str, b: str) -> str:
-    if b:
-        if a:
-            a += '\n\n'
-        a += b
-    return a
+def _concat_paragraphs(a: Optional[str], b: Optional[str]) -> str:
+    if a and b:
+        return f'{a}\n\n{b}'
+    return a or b or ''
+
 
 def _get_time_delta_as_human(before: datetime, after: datetime) -> str:
     if before >= after:
@@ -269,6 +268,7 @@ class ScoreboardNotifier:
                     f"o usando este bot (mira <a href='/ayuda'>/ayuda</a> para saber cómo).")
 
         last_contest_desc = None
+        next_contest_desc = None
         if last_contest:
             time_to_freeze = _get_time_delta_as_human(now, last_contest.freezes_at)
             time_to_end = _get_time_delta_as_human(now, last_contest.ends_at)
@@ -287,8 +287,7 @@ class ScoreboardNotifier:
                 if next_contest:
                     time_to_start = _get_time_delta_as_human(now, next_contest.starts_at)
                     starts_at_date = next_contest.starts_at.strftime("%Y-%m-%d")
-                    last_contest_desc = (f"{last_contest_desc}\n\n"
-                                         f"El siguiente concurso <i>{next_contest.name}</i> "
+                    next_contest_desc = (f"El siguiente concurso <i>{next_contest.name}</i> "
                                          f"iniciará en {time_to_start} ({starts_at_date}).")
             else:
                 last_contest_desc = None
@@ -297,9 +296,13 @@ class ScoreboardNotifier:
         if not last_contest_desc:
             return "¡No hay concursos agendados!"
 
-        return (f"{last_contest_desc}.\n"
-                f"Puedes ver su scoreboard completo <a href='{last_contest.scoreboard_url}'>aquí</a>, "
-                f"o usando este bot (mira <a href='/ayuda'>/ayuda</a> para saber cómo).")
+        last_contest_desc = (
+            f"{last_contest_desc}.\n"
+            f"Puedes ver su scoreboard completo <a href='{last_contest.scoreboard_url}'>aquí</a>, "
+            f"o usando este bot (mira <a href='/ayuda'>/ayuda</a> para saber cómo)."
+        )
+
+        return _concat_paragraphs(last_contest_desc, next_contest_desc)
 
     async def _get_top(self, telegram_user: TelegramUser, top_n: Optional[int]) -> None:
         if await self._notify_if_no_scoreboard(telegram_user):

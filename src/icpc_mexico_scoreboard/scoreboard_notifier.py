@@ -2,12 +2,14 @@ import asyncio
 import html
 import logging
 import math
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import List, Dict, Set, Optional, Iterable
 
 from django.db.models import QuerySet
 
 from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest, ScoreboardStatus
+from icpc_mexico_scoreboard.db.queries import get_repechaje_teams_that_have_advanced
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard
 from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, NotAScoreboardError
 from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramUser
@@ -22,6 +24,13 @@ _SCOREBOARD_PRE_START_TIME = timedelta(hours=2)
 def _format_code(code: str) -> str:
     return f"<code>{html.escape(code)}</code>"
 
+
+def _concat_paragraphs(a: str, b: str) -> str:
+    if b:
+        if a:
+            a += '\n\n'
+        a += b
+    return a
 
 def _get_time_delta_as_human(before: datetime, after: datetime) -> str:
     if before >= after:
@@ -299,7 +308,10 @@ class ScoreboardNotifier:
         n = 10 if top_n is None or top_n <= 0 else top_n
         top_teams = self._scoreboard.teams[:n]
         top_rank = self._get_current_rank(top_teams)
-        await self._telegram.send_message(top_rank or "El scoreboard está vacío",
+        advancing_rank = self._get_advancing_rank()
+        message = _concat_paragraphs(top_rank, advancing_rank)
+
+        await self._telegram.send_message(message or "El scoreboard está vacío",
                                           telegram_user.chat_id)
 
     async def _get_scoreboard(self, telegram_user: TelegramUser, search_text: Optional[str]) -> None:
@@ -339,9 +351,10 @@ class ScoreboardNotifier:
 
     async def _notify_scoreboard(self, telegram_user_chat_id: int, team_query_subscriptions: Iterable[str]) -> None:
         watched_teams = self._filter_teams(self._scoreboard, team_query_subscriptions)
-        current_rank = self._get_current_rank(watched_teams)
-        await self._telegram.send_message(current_rank or "Ningún equipo que sigues fué encontrado",
-                                          telegram_user_chat_id)
+        current_rank = self._get_current_rank(watched_teams) or "Ningún equipo que sigues fué encontrado"
+        advancing_rank = self._get_advancing_rank()
+        message = _concat_paragraphs(current_rank, advancing_rank)
+        await self._telegram.send_message(message, telegram_user_chat_id)
 
     async def _show_following(self, telegram_user: TelegramUser) -> None:
         user = await _get_or_create_user(telegram_user.chat_id)
@@ -391,14 +404,38 @@ class ScoreboardNotifier:
             return f"1 problema {solved_names}"
         return f"{team.total_solved} problemas {solved_names}"
 
-    def _get_current_rank(self, teams: List[ParsedBocaScoreboardTeam]) -> str:
-        def get_rank(team: ParsedBocaScoreboardTeam) -> str:
-            solved_summary = self._get_solved_summary(team)
-            return f"<b>#{team.place}</b> {_format_code(team.name)} " \
-                   f"resolvió {solved_summary} en {team.total_penalty} minutos"
+    def _get_team_summary(self, team: ParsedBocaScoreboardTeam) -> str:
+        solved_summary = self._get_solved_summary(team)
+        return f"<b>#{team.place}</b> {_format_code(team.name)} " \
+               f"resolvió {solved_summary} en {team.total_penalty} minutos"
 
+    def _get_current_rank(self, teams: List[ParsedBocaScoreboardTeam]) -> str:
         sorted_teams = sorted(teams, key=lambda t: (t.place, t.name.lower()))
-        return "\n".join(map(get_rank, sorted_teams))
+        return "\n".join(map(self._get_team_summary, sorted_teams))
+
+    def _get_advancing_rank(self) -> str:
+        # TODO: Decide from contest
+        if True:
+            return ''
+
+        school_team_count = defaultdict(int)
+        max_by_school = 1  # TODO: Get from contest
+        max_to_advance = 6  # TODO: Get from contest
+        # TODO: Get from contest
+        teams_to_ignore = {team.name.lower() for team in get_repechaje_teams_that_have_advanced()}
+        teams = []
+        for team in self._scoreboard.teams:
+            if team.name.lower() in teams_to_ignore:
+                continue
+
+            school_team_count['USE_SCHOOL'] += 1
+            if school_team_count['USE_SCHOOL'] <= max_by_school:
+                teams.append(team)
+                if len(teams) == max_to_advance:
+                    break
+
+        team_summaries = "\n".join(map(self._get_team_summary, teams))
+        return f'Los siguientes {len(teams)} se espera que avancen a la siguiente etapa:\n{team_summaries}'
 
     def _get_solved_diff_summary(self, old_team: ParsedBocaScoreboardTeam, new_team: ParsedBocaScoreboardTeam) -> str:
         solved_problems = self._get_solved_names(new_team).difference(self._get_solved_names(old_team))

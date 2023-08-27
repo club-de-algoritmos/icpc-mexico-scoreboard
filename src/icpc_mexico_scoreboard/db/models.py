@@ -25,6 +25,8 @@ class Contest(models.Model):
     starts_at = models.DateTimeField()
     freezes_at = models.DateTimeField()
     ends_at = models.DateTimeField()
+    max_teams_to_advance = models.IntegerField(null=True)
+    max_teams_per_school_to_advance = models.IntegerField(null=True)
 
 
 class ScoreboardUser(models.Model):

@@ -308,7 +308,7 @@ class ScoreboardNotifier:
         n = 10 if top_n is None or top_n <= 0 else top_n
         top_teams = self._scoreboard.teams[:n]
         top_rank = self._get_current_rank(top_teams)
-        advancing_rank = self._get_advancing_rank()
+        advancing_rank = await self._get_advancing_rank()
         message = _concat_paragraphs(top_rank, advancing_rank)
 
         await self._telegram.send_message(message or "El scoreboard está vacío",
@@ -352,7 +352,7 @@ class ScoreboardNotifier:
     async def _notify_scoreboard(self, telegram_user_chat_id: int, team_query_subscriptions: Iterable[str]) -> None:
         watched_teams = self._filter_teams(self._scoreboard, team_query_subscriptions)
         current_rank = self._get_current_rank(watched_teams) or "Ningún equipo que sigues fué encontrado"
-        advancing_rank = self._get_advancing_rank()
+        advancing_rank = await self._get_advancing_rank()
         message = _concat_paragraphs(current_rank, advancing_rank)
         await self._telegram.send_message(message, telegram_user_chat_id)
 
@@ -413,17 +413,19 @@ class ScoreboardNotifier:
         sorted_teams = sorted(teams, key=lambda t: (t.place, t.name.lower()))
         return "\n".join(map(self._get_team_summary, sorted_teams))
 
-    def _get_advancing_rank(self) -> str:
-        # TODO: Decide from contest
-        if True:
+    async def _get_advancing_rank(self) -> str:
+        contest = await _get_current_contest()
+        max_to_advance = contest.max_teams_to_advance
+        if not max_to_advance:
             return ''
 
-        school_team_count = defaultdict(int)
-        max_by_school = 1  # TODO: Get from contest
-        max_to_advance = 6  # TODO: Get from contest
-        # TODO: Get from contest
-        teams_to_ignore = {team.name.lower() for team in get_repechaje_teams_that_have_advanced()}
+        max_by_school = contest.max_teams_per_school_to_advance or 1
+        if 'repechaje' in contest.name.lower():
+            teams_to_ignore = {team.name.lower() for team in get_repechaje_teams_that_have_advanced()}
+        else:
+            teams_to_ignore = []
         teams = []
+        school_team_count = defaultdict(int)
         for team in self._scoreboard.teams:
             if team.name.lower() in teams_to_ignore:
                 continue

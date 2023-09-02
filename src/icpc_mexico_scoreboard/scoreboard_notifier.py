@@ -418,15 +418,13 @@ class ScoreboardNotifier:
                f"resolvió {solved_summary} en {team.total_penalty} minutos"
 
     def _get_current_rank(self, teams: List[ParsedBocaScoreboardTeam]) -> str:
-        sorted_teams = sorted(teams, key=lambda t: (t.place, t.name.lower()))
-
         warning = ""
-        if len(sorted_teams) > _MAX_NOTIFICATION_TEAM_COUNT:
+        if len(teams) > _MAX_NOTIFICATION_TEAM_COUNT:
             warning = (f"Solo se muestran los primeros {_MAX_NOTIFICATION_TEAM_COUNT}"
-                       f" equipos de los {len(sorted_teams)} encontrados:\n\n")
-            sorted_teams = sorted_teams[:_MAX_NOTIFICATION_TEAM_COUNT]
+                       f" equipos de los {len(teams)} encontrados:\n\n")
+            teams = teams[:_MAX_NOTIFICATION_TEAM_COUNT]
 
-        team_rank = "\n".join(map(self._get_team_summary, sorted_teams))
+        team_rank = "\n".join(map(self._get_team_summary, teams))
         return f"{warning}{team_rank}"
 
     async def _get_advancing_rank(self) -> str:

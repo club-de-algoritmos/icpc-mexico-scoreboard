@@ -18,8 +18,12 @@ def _setup_webdriver() -> webdriver.Chrome:
 def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
     """Parses the scoreboard of a BOCA contest."""
     if 'animeitor' in scoreboard_url:
-        return _parse_animeitor_scoreboard(scoreboard_url)
-    return _parse_boca_scoreboard(scoreboard_url)
+        scoreboard = _parse_animeitor_scoreboard(scoreboard_url)
+    else:
+        scoreboard = _parse_boca_scoreboard(scoreboard_url)
+
+    scoreboard.teams.sort(key=lambda t: (t.place, t.name.lower()))
+    return scoreboard
 
 
 def _parse_boca_scoreboard(scoreboard_url: str, optimize: bool = True) -> ParsedBocaScoreboard:

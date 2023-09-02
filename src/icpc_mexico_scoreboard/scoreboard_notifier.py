@@ -164,6 +164,7 @@ class ScoreboardNotifier:
             logger.info("No contest is actively running or soon to run")
             return
 
+        logger.debug(f"Parsing the scoreboard of contest {contest.name}")
         if contest.scoreboard_status == ScoreboardStatus.RELEASED:
             # Makes no sense to parse the scoreboard because it cannot change after its release
             # TODO: Return here when the scoreboard can be obtained from the DB
@@ -203,7 +204,6 @@ class ScoreboardNotifier:
                 f"El concurso <i>{contest.name}</i> ha terminado y, "
                 f"cuando los resultados finales se liberen, serás notificado del scoreboard final")
 
-        logger.debug(f"Parsing the scoreboard of contest {contest.name}")
         try:
             scoreboard = parse_boca_scoreboard(contest.scoreboard_url)
         except NotAScoreboardError:

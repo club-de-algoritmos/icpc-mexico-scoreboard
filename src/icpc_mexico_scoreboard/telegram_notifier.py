@@ -176,7 +176,7 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
         )
 
     async def send_developer_message(self, text: str) -> None:
-        await self.send_message(text, _DEVELOPER_CHAT_ID)
+        await self.send_message(f"ADMIN: {text}", _DEVELOPER_CHAT_ID)
 
     async def send_message(self, text: str, chat_id: int) -> None:
         if len(text) > _MESSAGE_SIZE_LIMIT:

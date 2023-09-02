@@ -152,9 +152,8 @@ class ScoreboardNotifier:
         while True:
             try:
                 await self._parse_current_scoreboard()
-            except Exception as e:
+            except Exception:
                 logging.exception("Unexpected error")
-                await self._notify_error(str(e))
 
             await asyncio.sleep(60)
 
@@ -377,9 +376,6 @@ class ScoreboardNotifier:
         user = await _get_or_create_user(telegram_user.chat_id)
         await ScoreboardSubscription.objects.filter(user=user, subscription=unfollow_text).adelete()
         await self._telegram.send_message(f"Ya no sigues {_format_code(unfollow_text)}", telegram_user.chat_id)
-
-    async def _notify_error(self, error: str) -> None:
-        await self._telegram.send_developer_message(f"Got unexpected error: {_format_code(error)}")
 
     def _filter_teams(
             self,

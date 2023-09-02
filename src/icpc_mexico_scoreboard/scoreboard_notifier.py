@@ -20,6 +20,8 @@ _SCOREBOARD_RELEASE_TIMEOUT = timedelta(days=5)
 
 _SCOREBOARD_PRE_START_TIME = timedelta(hours=2)
 
+_MAX_NOTIFICATION_TEAM_COUNT = 30
+
 
 def _format_code(code: str) -> str:
     return f"<code>{html.escape(code)}</code>"
@@ -308,8 +310,11 @@ class ScoreboardNotifier:
         if await self._notify_if_no_scoreboard(telegram_user):
             return
 
-        n = 10 if top_n is None or top_n <= 0 else top_n
-        top_teams = self._scoreboard.teams[:n]
+        if top_n is None or top_n <= 0:
+            top_n = 10
+        top_n = min(top_n, _MAX_NOTIFICATION_TEAM_COUNT)
+
+        top_teams = self._scoreboard.teams[:top_n]
         top_rank = self._get_current_rank(top_teams)
         advancing_rank = await self._get_advancing_rank()
         message = _concat_paragraphs(top_rank, advancing_rank)
@@ -414,7 +419,15 @@ class ScoreboardNotifier:
 
     def _get_current_rank(self, teams: List[ParsedBocaScoreboardTeam]) -> str:
         sorted_teams = sorted(teams, key=lambda t: (t.place, t.name.lower()))
-        return "\n".join(map(self._get_team_summary, sorted_teams))
+
+        warning = ""
+        if len(sorted_teams) > _MAX_NOTIFICATION_TEAM_COUNT:
+            warning = (f"Solo se muestran los primeros {_MAX_NOTIFICATION_TEAM_COUNT}"
+                       f" equipos de los {len(sorted_teams)} encontrados:\n\n")
+            sorted_teams = sorted_teams[:_MAX_NOTIFICATION_TEAM_COUNT]
+
+        team_rank = "\n".join(map(self._get_team_summary, sorted_teams))
+        return f"{warning}{team_rank}"
 
     async def _get_advancing_rank(self) -> str:
         contest = await _get_current_contest()

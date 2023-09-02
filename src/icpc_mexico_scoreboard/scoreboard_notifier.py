@@ -152,7 +152,7 @@ class ScoreboardNotifier:
         while True:
             try:
                 await self._parse_current_scoreboard()
-            except RuntimeError as e:
+            except Exception as e:
                 logging.exception("Unexpected error")
                 await self._notify_error(str(e))
 

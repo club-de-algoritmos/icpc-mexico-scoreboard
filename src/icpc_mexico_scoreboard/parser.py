@@ -1,3 +1,4 @@
+import re
 import time
 from typing import Set
 
@@ -26,8 +27,9 @@ def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
     return scoreboard
 
 
-def _parse_boca_scoreboard(scoreboard_url: str, optimize: bool = True) -> ParsedBocaScoreboard:
-    if "icpcmexico.org" in scoreboard_url and optimize:
+def _parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
+    mexico_only = False
+    if "icpcmexico.org" in scoreboard_url:
         response = requests.get(scoreboard_url)
         scoreboard_html = response.content
     else:
@@ -39,6 +41,8 @@ def _parse_boca_scoreboard(scoreboard_url: str, optimize: bool = True) -> Parsed
         iframes = driver.find_elements(By.TAG_NAME, "iframe")
         if iframes:
             driver.switch_to.frame(iframes[0])
+        if "subbr" in scoreboard_url:
+            mexico_only = True
         scoreboard_html = driver.page_source
         driver.quit()
 
@@ -51,9 +55,20 @@ def _parse_boca_scoreboard(scoreboard_url: str, optimize: bool = True) -> Parsed
     if not table_rows:
         raise NotAScoreboardError("Scoreboard header not found")
     table_header = table_rows[0]
-
     problem_names = [cell.text.strip() for cell in table_header.find_all("td")[3:-1]]
-    teams_elements = table_rows[1:]
+
+    if mexico_only:
+        mexico_site_link = None
+        for a in html.find_all("a"):
+            if a.text.strip().lower().startswith('mexico'):
+                mexico_site_link = a
+                break
+        onclick_js = mexico_site_link["onclick"]
+        site_id = onclick_js[onclick_js.index("(")+1:-1]
+        teams_elements = table.find_all("tr", {"class": f"sitegroup{site_id}"})
+    else:
+        teams_elements = table_rows[1:]
+
     teams = []
     seen_team_names: Set[str] = set()
     for teams_element in teams_elements:

@@ -15,6 +15,8 @@ from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBoca
 
 def _setup_webdriver() -> webdriver.Chrome:
     options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     return webdriver.Chrome(ChromeDriverManager().install(), options=options)
 

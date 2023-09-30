@@ -4,6 +4,7 @@ from typing import Set
 
 import requests
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
@@ -13,7 +14,9 @@ from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBoca
 
 
 def _setup_webdriver() -> webdriver.Chrome:
-    return webdriver.Chrome(ChromeDriverManager().install())
+    options = Options()
+    options.add_argument('--disable-dev-shm-usage')
+    return webdriver.Chrome(ChromeDriverManager().install(), options=options)
 
 
 def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:

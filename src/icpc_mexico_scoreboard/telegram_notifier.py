@@ -65,7 +65,7 @@ class TelegramNotifier:
                             ) -> None:
 
         token = env("TELEGRAM_BOT_TOKEN")
-        self._app = Application.builder().token(token).build()
+        self._app = Application.builder().token(token).concurrent_updates(True).build()
 
         self._app.add_handler(CommandHandler("estado", self._get_status))
         self._app.add_handler(CommandHandler("top", self._get_top))

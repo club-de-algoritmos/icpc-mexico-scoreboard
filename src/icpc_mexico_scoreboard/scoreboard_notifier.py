@@ -3,6 +3,7 @@ import html
 import logging
 import math
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta
 from typing import List, Dict, Set, Optional, Iterable
 
@@ -127,6 +128,12 @@ async def _get_current_contest() -> Optional[Contest]:
     return next_contest
 
 
+async def _parse_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
+    with ProcessPoolExecutor() as executor:
+        future = executor.submit(parse_boca_scoreboard, scoreboard_url)
+        return await asyncio.wrap_future(future)
+
+
 class ScoreboardNotifier:
     _telegram: Optional[TelegramNotifier] = None
     # TODO: Get from DB
@@ -205,7 +212,7 @@ class ScoreboardNotifier:
                 f"cuando los resultados finales se liberen, serás notificado del scoreboard final")
 
         try:
-            scoreboard = parse_boca_scoreboard(contest.scoreboard_url)
+            scoreboard = await _parse_scoreboard(contest.scoreboard_url)
         except NotAScoreboardError:
             logger.info(f"El concurso {contest.name} no ha iniciado")
             scoreboard = None

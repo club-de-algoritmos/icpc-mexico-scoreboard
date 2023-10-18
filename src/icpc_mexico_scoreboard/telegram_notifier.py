@@ -32,6 +32,7 @@ _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _ShowFollowingCallback = Callable[[TelegramUser], Awaitable[None]]
 _StopFollowingCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _StopAllCallback = Callable[[TelegramUser], Awaitable[None]]
+_AdminCallback = Callable[[str], Awaitable[None]]
 
 _DEVELOPER_CHAT_ID = int(env("TELEGRAM_DEVELOPER_CHAT_ID"))
 _MESSAGE_SIZE_LIMIT = 4096
@@ -53,6 +54,7 @@ class TelegramNotifier:
     _show_following_callback: Optional[_ShowFollowingCallback]
     _stop_following_callback: Optional[_StopFollowingCallback]
     _stop_all_callback: Optional[_StopAllCallback]
+    _admin_callback: Optional[_AdminCallback]
 
     async def start_running(self,
                             _get_status_callback: _GetStatusCallback,
@@ -62,6 +64,7 @@ class TelegramNotifier:
                             show_following_callback: _ShowFollowingCallback,
                             stop_following_callback: _StopFollowingCallback,
                             stop_all_callback: _StopAllCallback,
+                            admin_callback: _AdminCallback,
                             ) -> None:
 
         token = env("TELEGRAM_BOT_TOKEN")
@@ -78,6 +81,7 @@ class TelegramNotifier:
         self._app.add_handler(CommandHandler("start", self._start))
         self._app.add_handler(CommandHandler("stop", self._stop_all))
         self._app.add_handler(CommandHandler("alto", self._stop_all))
+        self._app.add_handler(CommandHandler("admin", self._admin))
         self._app.add_error_handler(self._handle_error)
 
         self._get_status_callback = _get_status_callback
@@ -87,6 +91,7 @@ class TelegramNotifier:
         self._show_following_callback = show_following_callback
         self._stop_following_callback = stop_following_callback
         self._stop_all_callback = stop_all_callback
+        self._admin_callback = admin_callback
 
         await self._app.initialize()
         commands = [
@@ -162,6 +167,15 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
 
     async def _stop_all(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await self._stop_all_callback(TelegramUser.from_update(update))
+
+    async def _admin(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        user = TelegramUser.from_update(update)
+        text = _get_command_args(update.message.text) or ''
+        if user.chat_id != _DEVELOPER_CHAT_ID:
+            await self.send_developer_message(f'User {user.chat_id} tried to run an admin command: {text}')
+            return
+
+        await self._admin_callback(text)
 
     async def _help(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(

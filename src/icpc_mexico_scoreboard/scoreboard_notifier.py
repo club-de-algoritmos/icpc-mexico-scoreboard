@@ -144,6 +144,7 @@ class ScoreboardNotifier:
             show_following_callback=self._show_following,
             stop_following_callback=self._stop_following,
             stop_all_callback=self._stop_all,
+            admin_callback=self._admin,
         )
         await self._start_parsing_scoreboards()
 
@@ -509,3 +510,35 @@ class ScoreboardNotifier:
         user = await _get_user(telegram_user.chat_id)
         if user:
             await _delete_user(user)
+
+    async def _admin(self, text: str) -> None:
+        args = text.split(' ')
+        valid_commands = ['name', 'scoreboard', 'time', 'max-teams']
+        command = args[0] if args else ''
+        if command not in valid_commands:
+            await self._telegram.send_developer_message(f'Invalid command. Options: {valid_commands}')
+            return
+
+        contest = await _get_current_contest()
+        if not contest:
+            await self._telegram.send_developer_message('No contest is running')
+            return
+
+        params = args[1:]
+        if command == 'name':
+            contest.name = params[0]
+        elif command == 'scoreboard':
+            contest.scoreboard_url = params[0]
+        elif command == 'time':
+            delta_args = {
+                params[1]: int(params[0])
+            }
+            delta = timedelta(**delta_args)
+            contest.starts_at += delta
+            contest.freezes_at += delta
+            contest.ends_at += delta
+        elif command == 'max-teams':
+            contest.max_teams_to_advance = int(params[0])
+
+        await contest.asave()
+        await self._telegram.send_developer_message('Done!')

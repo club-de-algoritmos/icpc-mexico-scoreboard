@@ -113,7 +113,7 @@ async def _get_current_contest() -> Optional[Contest]:
     last_contest = await _get_last_contest()
     next_contest = await _get_next_contest()
     if last_contest:
-        if not ScoreboardStatus.is_finished(last_contest):
+        if not ScoreboardStatus.is_finished(last_contest.scoreboard_status):
             return last_contest
         if next_contest and next_contest.starts_at < datetime.utcnow() + _SCOREBOARD_PRE_START_TIME:
             # Last contest has finished (whatever state) and the next one is about to start, so use that instead

@@ -32,9 +32,9 @@ def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
     return scoreboard
 
 
-def _parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
-    mexico_only = False
-    if "icpcmexico.org" in scoreboard_url:
+def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) -> ParsedBocaScoreboard:
+    mexico_only = 'naquadah' in scoreboard_url
+    if not wait_for_session:
         response = requests.get(scoreboard_url)
         scoreboard_html = response.content
     else:
@@ -46,8 +46,6 @@ def _parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
         iframes = driver.find_elements(By.TAG_NAME, "iframe")
         if iframes:
             driver.switch_to.frame(iframes[0])
-        if "subbr" in scoreboard_url:
-            mexico_only = True
         scoreboard_html = driver.page_source
         driver.quit()
 

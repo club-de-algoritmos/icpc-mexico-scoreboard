@@ -7,6 +7,7 @@ from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta
 from typing import List, Dict, Set, Optional, Iterable
 
+from django import db
 from django.db.models import QuerySet
 
 from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest, ScoreboardStatus
@@ -159,6 +160,7 @@ class ScoreboardNotifier:
         logger.debug("Starting to parse scoreboards")
         while True:
             try:
+                db.close_old_connections()
                 await self._parse_current_scoreboard()
             except Exception:
                 logging.exception("Unexpected error")
@@ -260,6 +262,8 @@ class ScoreboardNotifier:
         return False
 
     async def _get_status(self, telegram_user: TelegramUser) -> None:
+        db.close_old_connections()
+
         agenda = await self._compute_status()
         await self._telegram.send_message(agenda, chat_id=telegram_user.chat_id)
 
@@ -314,6 +318,8 @@ class ScoreboardNotifier:
         return _concat_paragraphs(last_contest_desc, next_contest_desc)
 
     async def _get_top(self, telegram_user: TelegramUser, top_n: Optional[int]) -> None:
+        db.close_old_connections()
+
         if await self._notify_if_no_scoreboard(telegram_user):
             return
 
@@ -330,6 +336,8 @@ class ScoreboardNotifier:
                                           telegram_user.chat_id)
 
     async def _get_scoreboard(self, telegram_user: TelegramUser, search_text: Optional[str]) -> None:
+        db.close_old_connections()
+
         if await self._notify_if_no_scoreboard(telegram_user):
             return
 
@@ -349,6 +357,8 @@ class ScoreboardNotifier:
         await self._notify_scoreboard(telegram_user.chat_id, subscriptions)
 
     async def _follow(self, telegram_user: TelegramUser, follow_text: str) -> None:
+        db.close_old_connections()
+
         user = await _get_or_create_user(telegram_user.chat_id)
         await ScoreboardSubscription.objects.aget_or_create(user=user, subscription=follow_text)
 
@@ -372,6 +382,8 @@ class ScoreboardNotifier:
         await self._telegram.send_message(message, telegram_user_chat_id)
 
     async def _show_following(self, telegram_user: TelegramUser) -> None:
+        db.close_old_connections()
+
         user = await _get_or_create_user(telegram_user.chat_id)
         subscriptions = await _get_user_subscriptions(user)
         if not subscriptions:
@@ -381,6 +393,8 @@ class ScoreboardNotifier:
         await self._telegram.show_following(subscriptions, user.telegram_chat_id)
 
     async def _stop_following(self, telegram_user: TelegramUser, unfollow_text: str) -> None:
+        db.close_old_connections()
+
         user = await _get_or_create_user(telegram_user.chat_id)
         await ScoreboardSubscription.objects.filter(user=user, subscription=unfollow_text).adelete()
         await self._telegram.send_message(f"Ya no sigues {_format_code(unfollow_text)}", telegram_user.chat_id)
@@ -513,12 +527,16 @@ class ScoreboardNotifier:
             await self._telegram.send_message(message, user.telegram_chat_id)
 
     async def _stop_all(self, telegram_user: TelegramUser) -> None:
+        db.close_old_connections()
+
         logger.debug(f'Stopping all notifications to user with chat ID {telegram_user.chat_id}')
         user = await _get_user(telegram_user.chat_id)
         if user:
             await _delete_user(user)
 
     async def _admin(self, text: str) -> None:
+        db.close_old_connections()
+
         args = text.split(' ')
         valid_commands = ['name', 'scoreboard', 'time', 'max-teams']
         command = args[0] if args else ''

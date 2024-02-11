@@ -18,6 +18,8 @@ DATABASES = {
     }
 }
 
+CONN_MAX_AGE = 10*60  # 10 minutes
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 INSTALLED_APPS = (

@@ -9,8 +9,13 @@ def create_contest(
         scoreboard_url: str = 'https://score.icpcmexico.org',
         scoreboard_status: ScoreboardStatus = ScoreboardStatus.INVISIBLE,
 ) -> Contest:
-    freezes_at = starts_at + timedelta(hours=4)
-    ends_at = starts_at + timedelta(hours=5)
+    unfrozen_duration = timedelta(hours=4)
+    total_duration = timedelta(hours=5)
+    if "masters" in name.lower():
+        unfrozen_duration = timedelta(minutes=140)
+        total_duration = timedelta(hours=3)
+    freezes_at = starts_at + unfrozen_duration
+    ends_at = starts_at + total_duration
 
     return Contest.objects.create(
         name=name,

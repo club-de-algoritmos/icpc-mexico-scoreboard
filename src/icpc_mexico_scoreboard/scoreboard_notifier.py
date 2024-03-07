@@ -120,7 +120,7 @@ async def _get_current_contest() -> Optional[Contest]:
             # Last contest has finished (whatever state) and the next one is about to start, so use that instead
             return next_contest
         if last_contest.scoreboard_status == ScoreboardStatus.ARCHIVED:
-            # Makes no sense to return an archived context, so return whatever is next, even is there is none
+            # Makes no sense to return an archived contest, so return whatever is next, even is there is none
             return next_contest
         # The last contest is finished, but we may still need to release it, or users may want to query it
         return last_contest

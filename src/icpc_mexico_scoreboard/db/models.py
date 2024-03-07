@@ -13,7 +13,7 @@ class ScoreboardStatus(models.TextChoices):
     ARCHIVED = "archived"
 
     @staticmethod
-    def is_finished(status) -> bool:
+    def is_finished(status: "ScoreboardStatus") -> bool:
         return status in [ScoreboardStatus.WAITING_TO_BE_RELEASED, ScoreboardStatus.RELEASED, ScoreboardStatus.ARCHIVED]
 
 

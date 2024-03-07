@@ -4,7 +4,10 @@ from typing import Set
 
 import requests
 from selenium import webdriver
+from selenium.common import TimeoutException, UnexpectedAlertPresentException
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.wait import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
@@ -33,15 +36,34 @@ def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
 
 
 def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) -> ParsedBocaScoreboard:
-    mexico_only = 'naquadah' in scoreboard_url
-    if not wait_for_session:
+    is_rpc = "redprogramacioncompetitiva" in scoreboard_url
+    mexico_only = is_rpc or 'naquadah' in scoreboard_url
+    if not wait_for_session and not is_rpc:
         response = requests.get(scoreboard_url)
         scoreboard_html = response.content
     else:
         driver = _setup_webdriver()
         driver.get(scoreboard_url)
-        # TODO: Wait properly
-        time.sleep(5)
+
+        if is_rpc:
+            name_input = driver.find_element(By.NAME, "name")
+            name_input.send_keys("board")
+            submit_button = driver.find_element(By.NAME, "Submit")
+            submit_button.click()
+            try:
+                WebDriverWait(driver, 20).until(
+                    expected_conditions.visibility_of_element_located(
+                        (By.XPATH, "//*[contains(text(), 'Available scores:')]")
+                    )
+                )
+            except UnexpectedAlertPresentException:
+                raise NotAScoreboardError("User does not exist, most likely the contest has not started yet")
+            except TimeoutException:
+                raise NotAScoreboardError("Scoreboard not found")
+        else:
+            # TODO: Wait properly
+            time.sleep(5)
+
         # Multi-sites like Brazil use an iframe, switch to it if found
         iframes = driver.find_elements(By.TAG_NAME, "iframe")
         if iframes:
@@ -57,8 +79,12 @@ def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) 
     table_rows = table.find_all("tr")
     if not table_rows:
         raise NotAScoreboardError("Scoreboard header not found")
+
     table_header = table_rows[0]
-    problem_names = [cell.text.strip() for cell in table_header.find_all("td")[3:-1]]
+    header_cells = table_header.find_all("td")
+    if not header_cells:
+        header_cells = table_header.find_all("th")
+    problem_names = [cell.text.strip() for cell in header_cells[3:-1]]
 
     if mexico_only:
         mexico_site_link = None
@@ -77,7 +103,15 @@ def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) 
     for teams_element in teams_elements:
         cell_elements = teams_element.find_all("td")
 
-        name = cell_elements[2].text.strip()
+        if is_rpc:
+            # RPC has Name and University columns, join them to ease the filtering
+            team_name = cell_elements[1].text.strip()
+            school_name = cell_elements[2].text.strip()
+            name = f"{team_name} ({school_name})"
+        else:
+            # Other scoreboards have a User/Site and Name columns, only use Name
+            name = cell_elements[2].text.strip()
+
         # Multi-sites have duplicate teams, only parse the first one
         if name in seen_team_names:
             continue

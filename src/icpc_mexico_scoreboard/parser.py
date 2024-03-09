@@ -1,6 +1,5 @@
-import re
 import time
-from typing import Set
+from typing import Set, Optional
 
 import requests
 from selenium import webdriver
@@ -16,12 +15,20 @@ from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBoca
     ParsedBocaScoreboardProblem, NotAScoreboardError
 
 
-def _setup_webdriver() -> webdriver.Chrome:
+_webdriver: Optional[webdriver.Chrome] = None
+
+
+def _get_webdriver() -> webdriver.Chrome:
+    global _webdriver
+    if _webdriver:
+        return _webdriver
+
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    return webdriver.Chrome(ChromeDriverManager().install(), options=options)
+    _webdriver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
+    return _webdriver
 
 
 def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
@@ -42,7 +49,7 @@ def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) 
         response = requests.get(scoreboard_url)
         scoreboard_html = response.content
     else:
-        driver = _setup_webdriver()
+        driver = _get_webdriver()
         driver.get(scoreboard_url)
 
         if is_rpc:
@@ -150,7 +157,7 @@ def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) 
 
 
 def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
-    driver = _setup_webdriver()
+    driver = _get_webdriver()
     driver.get(scoreboard_url)
     # TODO: Wait properly
     time.sleep(15)

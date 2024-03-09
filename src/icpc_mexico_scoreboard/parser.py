@@ -58,7 +58,8 @@ def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) 
                 )
             except UnexpectedAlertPresentException:
                 raise NotAScoreboardError("User does not exist, most likely the contest has not started yet")
-            except TimeoutException:
+            except (TimeoutException, AttributeError):
+                # AttributeError happens when the scoreboard is not found
                 raise NotAScoreboardError("Scoreboard not found")
         else:
             # TODO: Wait properly

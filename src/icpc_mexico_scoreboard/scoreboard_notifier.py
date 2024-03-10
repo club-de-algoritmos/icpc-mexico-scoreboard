@@ -173,10 +173,11 @@ class ScoreboardNotifier:
             logger.info("No contest is actively running or soon to run")
             return
 
-        if not contest.is_official and contest.scoreboard_status in [
+        if self._scoreboard and not contest.is_official and contest.scoreboard_status in [
                 ScoreboardStatus.RELEASED, ScoreboardStatus.ARCHIVED]:
             # Training contests, like RPC, can change their scoreboard after finishing because they allow upsolving,
             # so return early to avoid notifying about changes due to upsolving
+            # That said, still parse the scoreboard at least once, so it can be queried
             return
 
         logger.debug(f"Parsing the scoreboard of contest {contest.name}")

@@ -28,6 +28,10 @@ class Contest(models.Model):
     max_teams_to_advance = models.IntegerField(null=True)
     max_teams_per_school_to_advance = models.IntegerField(null=True)
 
+    @property
+    def is_official(self) -> bool:
+        return "redprogramacioncompetitiva" not in self.scoreboard_url
+
 
 class ScoreboardUser(models.Model):
     telegram_chat_id = models.IntegerField(unique=True)

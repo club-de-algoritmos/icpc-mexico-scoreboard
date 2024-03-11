@@ -90,10 +90,23 @@ async def _delete_user(user: ScoreboardUser) -> None:
     logger.debug(f"Deleted user with chat ID {user.telegram_chat_id}")
 
 
-async def _get_user_subscriptions(user: ScoreboardUser) -> List[str]:
+async def _get_team_subscriptions(user: ScoreboardUser) -> List[str]:
     return sorted(
         await _query_to_list(
-            ScoreboardSubscription.objects.filter(user=user).values_list("subscription", flat=True)))
+            ScoreboardSubscription.objects.filter(
+                user=user, subscription__isnull=False
+            ).values_list("subscription", flat=True)
+        )
+    )
+
+
+async def _get_top_subscription(user: ScoreboardUser) -> Optional[int]:
+    top = await ScoreboardSubscription.objects.filter(
+        user=user, top__isnull=False
+    ).values_list("top", flat=True).afirst()
+    if not top:
+        return None
+    return min(top, _MAX_NOTIFICATION_TEAM_COUNT)
 
 
 async def _get_users_with_subscriptions() -> List[ScoreboardUser]:
@@ -151,6 +164,8 @@ class ScoreboardNotifier:
             follow_callback=self._follow,
             show_following_callback=self._show_following,
             stop_following_callback=self._stop_following,
+            follow_top_callback=self._follow_top,
+            stop_following_top_callback=self._stop_following_top,
             stop_all_callback=self._stop_all,
             admin_callback=self._admin,
         )
@@ -178,6 +193,7 @@ class ScoreboardNotifier:
             # Training contests, like RPC, can change their scoreboard after finishing because they allow upsolving,
             # so return early to avoid notifying about changes due to upsolving
             # That said, still parse the scoreboard at least once, so it can be queried
+            logger.info("No contest is actively running or soon to run")
             return
 
         logger.debug(f"Parsing the scoreboard of contest {contest.name}")
@@ -349,19 +365,20 @@ class ScoreboardNotifier:
             return
 
         if search_text:
-            await self._notify_scoreboard(telegram_user.chat_id, {search_text})
+            await self._notify_scoreboard(telegram_user.chat_id, team_queries={search_text})
             return
 
         user = await _get_or_create_user(telegram_user.chat_id)
-        subscriptions = await _get_user_subscriptions(user)
-        if not subscriptions:
+        team_queries = await _get_team_subscriptions(user)
+        top_query = await _get_top_subscription(user)
+        if not team_queries and not top_query:
             await self._telegram.send_message("No sigues ningún equipo, ejecuta el commando "
                                               f"{_format_code('/seguir subcadena')}"
                                               "para seguir los equipos que quieras",
                                               telegram_user.chat_id)
             return
 
-        await self._notify_scoreboard(telegram_user.chat_id, subscriptions)
+        await self._notify_scoreboard(telegram_user.chat_id, team_queries=team_queries, top_query=top_query)
 
     async def _follow(self, telegram_user: TelegramUser, follow_text: str) -> None:
         db.close_old_connections()
@@ -373,17 +390,54 @@ class ScoreboardNotifier:
             return
 
         # Notify of scoreboard, only for the new subscription
-        await self._notify_scoreboard(telegram_user.chat_id, {follow_text})
+        await self._notify_scoreboard(telegram_user.chat_id, team_queries={follow_text})
+
+    async def _follow_top(self, telegram_user: TelegramUser, top: int) -> None:
+        if top <= 0:
+            await self._stop_following_top(telegram_user)
+            return
+
+        db.close_old_connections()
+
+        user = await _get_or_create_user(telegram_user.chat_id)
+        # Delete any previous top subscription
+        await ScoreboardSubscription.objects.filter(user=user, top__isnull=False).adelete()
+        # Add the new top subscription
+        await ScoreboardSubscription.objects.aget_or_create(user=user, top=top)
+
+        if await self._notify_if_no_scoreboard(telegram_user):
+            return
+
+        # Notify of scoreboard, only for the new subscription
+        await self._notify_scoreboard(telegram_user.chat_id, top_query=top)
 
     async def _notify_scoreboard_to_all_users(self) -> None:
         # TODO: Improve performance
         for user in await _get_users_with_subscriptions():
-            subscriptions = await _get_user_subscriptions(user)
-            await self._notify_scoreboard(user.telegram_chat_id, subscriptions)
+            team_queries = await _get_team_subscriptions(user)
+            top_query = await _get_top_subscription(user)
+            await self._notify_scoreboard(user.telegram_chat_id, team_queries=team_queries, top_query=top_query)
 
-    async def _notify_scoreboard(self, telegram_user_chat_id: int, team_query_subscriptions: Iterable[str]) -> None:
-        watched_teams = self._filter_teams(self._scoreboard, team_query_subscriptions)
-        current_rank = self._get_current_rank(watched_teams) or "Ningún equipo que sigues fué encontrado"
+    async def _notify_scoreboard(
+            self,
+            telegram_user_chat_id: int,
+            team_queries: Optional[Iterable[str]] = None,
+            top_query: Optional[int] = None,
+    ) -> None:
+        to_add_teams: List[ParsedBocaScoreboardTeam] = []
+        if top_query:
+            to_add_teams += self._scoreboard.teams[:top_query]
+        if team_queries:
+            to_add_teams += self._filter_teams(self._scoreboard, team_queries)
+
+        watched_teams: List[ParsedBocaScoreboardTeam] = []
+        seen_team_names: Set[str] = set()
+        for team in to_add_teams:
+            if team.name not in seen_team_names:
+                seen_team_names.add(team.name)
+                watched_teams.append(team)
+
+        current_rank = self._get_current_rank(list(watched_teams)) or "Ningún equipo que sigues fué encontrado"
         advancing_rank = await self._get_advancing_rank()
         message = _concat_paragraphs(current_rank, advancing_rank)
         await self._telegram.send_message(message, telegram_user_chat_id)
@@ -392,7 +446,7 @@ class ScoreboardNotifier:
         db.close_old_connections()
 
         user = await _get_or_create_user(telegram_user.chat_id)
-        subscriptions = await _get_user_subscriptions(user)
+        subscriptions = await _get_team_subscriptions(user)
         if not subscriptions:
             await self._telegram.send_message("No sigues a ningún equipo", user.telegram_chat_id)
             return
@@ -405,6 +459,18 @@ class ScoreboardNotifier:
         user = await _get_or_create_user(telegram_user.chat_id)
         await ScoreboardSubscription.objects.filter(user=user, subscription=unfollow_text).adelete()
         await self._telegram.send_message(f"Ya no sigues {_format_code(unfollow_text)}", telegram_user.chat_id)
+
+    async def _stop_following_top(self, telegram_user: TelegramUser) -> None:
+        db.close_old_connections()
+
+        user = await _get_or_create_user(telegram_user.chat_id)
+        previous_top = await _get_top_subscription(user)
+        if not previous_top:
+            await self._telegram.send_message("No sigues ningún top", telegram_user.chat_id)
+            return
+
+        await ScoreboardSubscription.objects.filter(user=user, top__isnull=False).adelete()
+        await self._telegram.send_message(f"Ya no sigues el top {previous_top}", telegram_user.chat_id)
 
     def _filter_teams(
             self,
@@ -522,11 +588,26 @@ class ScoreboardNotifier:
     async def _notify_rank_updates(self, contest: Contest) -> None:
         # TODO: Improve performance
         for user in await _get_users_with_subscriptions():
-            subscriptions = await _get_user_subscriptions(user)
-            previous_teams = self._filter_teams(self._previous_scoreboard, subscriptions)
-            teams = self._filter_teams(self._scoreboard, subscriptions)
-            rank_update = self._get_rank_update(previous_teams, teams, contest)
-            if rank_update:
+            team_queries = await _get_team_subscriptions(user)
+            rank_update = ""
+            if team_queries:
+                previous_teams = self._filter_teams(self._previous_scoreboard, team_queries)
+                teams = self._filter_teams(self._scoreboard, team_queries)
+                rank_update = self._get_rank_update(previous_teams, teams, contest)
+
+            top_query = await _get_top_subscription(user)
+            top_update = ""
+            if top_query:
+                previous_top = self._previous_scoreboard.teams[:top_query] if self._previous_scoreboard else []
+                current_top = self._scoreboard.teams[:top_query] if self._scoreboard else []
+                # Only check the order to see if the top has changed
+                previous_top_team_names = [team.name for team in previous_top]
+                current_top_team_names = [team.name for team in current_top]
+                if previous_top_team_names != current_top_team_names:
+                    top_update = f"El top {top_query} ha cambiado:\n{self._get_current_rank(current_top)}"
+
+            message = "\n\n".join([rank_update, top_update]).strip()
+            if message:
                 await self._telegram.send_message(rank_update, user.telegram_chat_id)
 
     async def _notify_all_subscribed_users(self, message: str) -> None:

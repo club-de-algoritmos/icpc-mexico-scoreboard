@@ -31,6 +31,8 @@ _GetScoreboardCallback = Callable[[TelegramUser, Optional[str]], Awaitable[None]
 _FollowCallback = Callable[[TelegramUser, str], Awaitable[None]]
 _ShowFollowingCallback = Callable[[TelegramUser], Awaitable[None]]
 _StopFollowingCallback = Callable[[TelegramUser, str], Awaitable[None]]
+_FollowTopCallback = Callable[[TelegramUser, int], Awaitable[None]]
+_StopFollowingTopCallback = Callable[[TelegramUser], Awaitable[None]]
 _StopAllCallback = Callable[[TelegramUser], Awaitable[None]]
 _AdminCallback = Callable[[str], Awaitable[None]]
 
@@ -53,6 +55,8 @@ class TelegramNotifier:
     _follow_callback: Optional[_FollowCallback]
     _show_following_callback: Optional[_ShowFollowingCallback]
     _stop_following_callback: Optional[_StopFollowingCallback]
+    _follow_top_callback: Optional[_FollowTopCallback]
+    _stop_following_top_callback: Optional[_StopFollowingTopCallback]
     _stop_all_callback: Optional[_StopAllCallback]
     _admin_callback: Optional[_AdminCallback]
 
@@ -63,6 +67,8 @@ class TelegramNotifier:
                             follow_callback: _FollowCallback,
                             show_following_callback: _ShowFollowingCallback,
                             stop_following_callback: _StopFollowingCallback,
+                            follow_top_callback: Optional[_FollowTopCallback],
+                            stop_following_top_callback: Optional[_StopFollowingTopCallback],
                             stop_all_callback: _StopAllCallback,
                             admin_callback: _AdminCallback,
                             ) -> None:
@@ -74,8 +80,10 @@ class TelegramNotifier:
         self._app.add_handler(CommandHandler("top", self._get_top))
         self._app.add_handler(CommandHandler("scoreboard", self._get_scoreboard))
         self._app.add_handler(CommandHandler("seguir", self._follow))
+        self._app.add_handler(CommandHandler("seguirtop", self._follow_top))
         self._app.add_handler(CommandHandler("dejar", self._show_following))
         self._app.add_handler(CallbackQueryHandler(self._stop_following))
+        self._app.add_handler(CommandHandler("dejartop", self._stop_following_top))
         self._app.add_handler(CommandHandler("ayuda", self._help))
         # TODO: Add /reportar
         self._app.add_handler(CommandHandler("start", self._start))
@@ -90,6 +98,8 @@ class TelegramNotifier:
         self._follow_callback = follow_callback
         self._show_following_callback = show_following_callback
         self._stop_following_callback = stop_following_callback
+        self._follow_top_callback = follow_top_callback
+        self._stop_following_top_callback = stop_following_top_callback
         self._stop_all_callback = stop_all_callback
         self._admin_callback = admin_callback
 
@@ -99,7 +109,9 @@ class TelegramNotifier:
             BotCommand("top", "Entérate del top del scoreboard"),
             BotCommand("scoreboard", "Entérate del scoreboard de tus equipos"),
             BotCommand("seguir", "Comienza a seguir equipos"),
+            BotCommand("seguirtop", "Enteráte de cambios en el top"),
             BotCommand("dejar", "Deja de seguir equipos"),
+            BotCommand("dejartop", "Deja de seguir el top de los equipos"),
             BotCommand("alto", "Detén todas las notificaciones"),
             BotCommand("ayuda", "Muestra la ayuda sobre los comandos"),
         ]
@@ -134,9 +146,23 @@ class TelegramNotifier:
     async def _follow(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         follow_text = _get_command_args(update.message.text)
         if not follow_text:
-            await update.message.reply_html('Especifica una subcadena despues de <code>/seguir</code>')
+            await update.message.reply_html('Especifica una subcadena después de <code>/seguir</code>')
             return
         await self._follow_callback(TelegramUser.from_update(update), follow_text)
+
+    async def _follow_top(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        top_n_text = _get_command_args(update.message.text)
+        top_n = None
+        if top_n_text:
+            try:
+                top_n = int(top_n_text)
+            except ValueError:
+                pass
+            
+        if not top_n:
+            await update.message.reply_html('Especifica un entero después de <code>/seguirtop</code>')
+            return
+        await self._follow_top_callback(TelegramUser.from_update(update), top_n)
 
     async def _show_following(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await self._show_following_callback(TelegramUser.from_update(update))
@@ -156,6 +182,9 @@ class TelegramNotifier:
     async def _stop_following(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         unfollow_text = update.callback_query.data
         await self._stop_following_callback(TelegramUser.from_update(update), unfollow_text)
+
+    async def _stop_following_top(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        await self._stop_following_top_callback(TelegramUser.from_update(update))
 
     async def _start(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_html(
@@ -184,13 +213,15 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
 <a href="/top">/top</a> - Entérate del top 10 del scoreboard, agrega un entero para especificar cuántos equipos quieres ver. Por ejemplo, <code>/top 5</code>.
 <a href="/scoreboard">/scoreboard</a> - Entérate del scoreboard filtrado por los equipos que estás siguiendo. Especifica una subcdena si quieres saber sobre algunos equipos solamente, y no los que sigues, por ejemplo, <code>/scoreboard itsur</code>.
 <a href="/seguir">/seguir</a> - Comienza a seguir equipos cuyo nombre tengan la subcadena que especifiques, te notificaremos cuando estos equipos resuelvan un problema. Por ejemplo, <code>/seguir Culiacan</code>.
+<a href="/seguirtop">/seguirtop</a> - Comienza a seguir el top de los equipos que especifiques, te notificaremos cuando haya algún cambio en dicho top. Por ejemplo, <code>/seguirtop 3'</code>.
 <a href="/dejar">/dejar</a> - Úsalo cuando quieras dejar de seguir a algunos equipos, sólo da click en la subcadena que quieras dejar de seguir.
+<a href="/dejartop">/dejartop</a> - Úsalo cuando quieras dejar de seguir al top de equipos que sigues.
 <a href="/alto">/alto</a> - Deja de seguir a todos los equipos y evita que el bot te siga notificando.
             '''
         )
 
     async def send_developer_message(self, text: str) -> None:
-        await self.send_message(f"ADMIN: {text}", _DEVELOPER_CHAT_ID)
+        await self.send_message(f"**ADMIN**: {text}", _DEVELOPER_CHAT_ID)
 
     async def send_message(self, text: str, chat_id: int) -> None:
         if len(text) > _MESSAGE_SIZE_LIMIT:

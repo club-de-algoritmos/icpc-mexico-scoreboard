@@ -39,7 +39,8 @@ class ScoreboardUser(models.Model):
 
 class ScoreboardSubscription(models.Model):
     user = models.ForeignKey(ScoreboardUser, on_delete=models.PROTECT, related_name="+")
-    subscription = models.CharField(max_length=100)
+    subscription = models.CharField(max_length=100, null=True)
+    top = models.IntegerField(null=True)
 
 
 # TODO: Add Scoreboard and Team models

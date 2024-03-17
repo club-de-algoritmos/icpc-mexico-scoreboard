@@ -189,7 +189,7 @@ def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
             continue
         seen_team_names.add(name)
 
-        place = int(team_prefix.find_all(class_="colocacao")[1].text.strip())
+        place = int(team_prefix.find_all(class_="colocacao")[0].text.strip())
         total_solved = int(team_prefix.find(class_="cima").text.strip())
         total_penalty = int(team_prefix.find(class_="baixo").text.strip())
 

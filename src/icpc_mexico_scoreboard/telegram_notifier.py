@@ -224,6 +224,10 @@ Dá click en <a href="/ayuda">/ayuda</a> para aprender a usarme.
         await self.send_message(f"**ADMIN**: {text}", _DEVELOPER_CHAT_ID)
 
     async def send_message(self, text: str, chat_id: int) -> None:
+        if not text.strip():
+            logger.warning(f"Tried to send an empty message to chat ID {chat_id}")
+            return
+        
         if len(text) > _MESSAGE_SIZE_LIMIT:
             logger.debug(f"Shortening long message from {len(text)} to {_MESSAGE_SIZE_LIMIT} characters")
             text = f"{text[:_MESSAGE_SIZE_LIMIT - 3]}..."

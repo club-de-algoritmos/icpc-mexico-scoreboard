@@ -175,7 +175,7 @@ class ScoreboardNotifier:
         logger.debug("Starting to parse scoreboards")
         while True:
             try:
-                db.close_old_connections()
+                db.connections["default"].close()
                 await self._parse_current_scoreboard()
             except Exception:
                 logging.exception("Unexpected error")

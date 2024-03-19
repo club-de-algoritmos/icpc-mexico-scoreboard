@@ -12,6 +12,7 @@ from django.db.models import QuerySet
 
 from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest, ScoreboardStatus
 from icpc_mexico_scoreboard.db.queries import get_repechaje_teams_that_have_advanced
+from icpc_mexico_scoreboard.db.util import close_connection
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard
 from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, NotAScoreboardError
 from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramUser
@@ -175,7 +176,7 @@ class ScoreboardNotifier:
         logger.debug("Starting to parse scoreboards")
         while True:
             try:
-                db.connections["default"].close()
+                await close_connection()
                 await self._parse_current_scoreboard()
             except Exception:
                 logging.exception("Unexpected error")

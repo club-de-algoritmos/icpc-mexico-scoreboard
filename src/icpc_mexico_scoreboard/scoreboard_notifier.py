@@ -184,30 +184,28 @@ class ScoreboardNotifier:
             await asyncio.sleep(60)
 
     async def _parse_current_scoreboard(self) -> None:
+        logger.debug("Looking for a contest to parse")
         contest = await _get_current_contest()
         if not contest:
             logger.info("No contest is actively running or soon to run")
             return
 
-        if self._scoreboard and not contest.is_official and contest.scoreboard_status in [
-                ScoreboardStatus.RELEASED, ScoreboardStatus.ARCHIVED]:
+        if self._scoreboard and contest.scoreboard_status in [ScoreboardStatus.RELEASED, ScoreboardStatus.ARCHIVED]:
             # Training contests, like RPC, can change their scoreboard after finishing because they allow upsolving,
-            # so return early to avoid notifying about changes due to upsolving
-            # That said, still parse the scoreboard at least once, so it can be queried
+            # so return early to avoid notifying about changes due to upsolving.
+            # That said, still parse the scoreboard at least once, so it can be queried, which we can stop doing once
+            # the scoreboard comes from the DB.
             logger.info("No contest is actively running or soon to run")
             return
 
-        logger.debug(f"Parsing the scoreboard of contest {contest.name}")
-        if contest.scoreboard_status == ScoreboardStatus.RELEASED:
-            # Makes no sense to parse the scoreboard because it cannot change after its release
-            # TODO: Return here when the scoreboard can be obtained from the DB
-            pass
-
         now = datetime.utcnow()
         if contest.starts_at > now:
-            # The contest has not started, do nothing yet
-            pass
-        elif contest.freezes_at > now:
+            # No need to put in work when the contest has not started and consume resources
+            logger.info(f"Contest {contest.name} has not started yet, nothing will be parsed")
+            return
+
+        logger.debug(f"Parsing the scoreboard of contest {contest.name}")
+        if contest.freezes_at > now:
             # Not yet frozen
             if contest.scoreboard_status != ScoreboardStatus.VISIBLE:
                 contest.scoreboard_status = ScoreboardStatus.VISIBLE

@@ -32,6 +32,9 @@ class Contest(models.Model):
     def is_official(self) -> bool:
         return "redprogramacioncompetitiva" not in self.scoreboard_url
 
+    def __str__(self) -> str:
+        return f"Contest {self.name}"
+
 
 class ScoreboardUser(models.Model):
     telegram_chat_id = models.IntegerField(unique=True)

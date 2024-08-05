@@ -45,7 +45,7 @@ def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
 def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) -> ParsedBocaScoreboard:
     is_rpc = "redprogramacioncompetitiva" in scoreboard_url
     mexico_only = is_rpc or 'naquadah' in scoreboard_url
-    if not wait_for_session and not is_rpc:
+    if not wait_for_session and not is_rpc and not scoreboard_url.startswith("file://"):
         response = requests.get(scoreboard_url)
         scoreboard_html = response.content
     else:

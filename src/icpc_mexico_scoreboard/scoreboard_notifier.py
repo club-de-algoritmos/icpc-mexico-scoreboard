@@ -594,20 +594,23 @@ class ScoreboardNotifier:
                 teams = self._filter_teams(self._scoreboard, team_queries)
                 rank_update = self._get_rank_update(previous_teams, teams, contest)
 
-            top_query = await _get_top_subscription(user)
             top_update = ""
-            if top_query:
-                previous_top = self._previous_scoreboard.teams[:top_query] if self._previous_scoreboard else []
-                current_top = self._scoreboard.teams[:top_query] if self._scoreboard else []
-                # Only check the order to see if the top has changed
-                previous_top_team_names = [team.name for team in previous_top]
-                current_top_team_names = [team.name for team in current_top]
-                if previous_top_team_names != current_top_team_names:
-                    top_update = f"El top {top_query} ha cambiado:\n{self._get_current_rank(current_top)}"
+            # Without a previous scoreboard, there is no Top update, as it either just begun,
+            # or the service got restarted
+            if self._previous_scoreboard:
+                top_query = await _get_top_subscription(user)
+                if top_query:
+                    previous_top = self._previous_scoreboard.teams[:top_query] if self._previous_scoreboard else []
+                    current_top = self._scoreboard.teams[:top_query] if self._scoreboard else []
+                    # Only check the order to see if the top has changed
+                    previous_top_team_names = [team.name for team in previous_top]
+                    current_top_team_names = [team.name for team in current_top]
+                    if previous_top_team_names != current_top_team_names:
+                        top_update = f"El top {top_query} ha cambiado:\n{self._get_current_rank(current_top)}"
 
             message = "\n\n".join([rank_update, top_update]).strip()
             if message:
-                await self._telegram.send_message(rank_update, user.telegram_chat_id)
+                await self._telegram.send_message(message, user.telegram_chat_id)
 
     async def _notify_all_subscribed_users(self, message: str) -> None:
         for user in await _get_users_with_subscriptions():

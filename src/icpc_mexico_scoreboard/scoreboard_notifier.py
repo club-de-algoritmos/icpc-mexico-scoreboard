@@ -149,6 +149,16 @@ async def _parse_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
         return await asyncio.wrap_future(future)
 
 
+def _get_top_teams(scoreboard: Optional[ParsedBocaScoreboard], top: int) -> List[ParsedBocaScoreboardTeam]:
+    if not scoreboard:
+        return []
+    return [
+        team
+        for team in scoreboard.teams[:top]
+        if team.total_solved > 0
+    ]
+
+
 class ScoreboardNotifier:
     _telegram: Optional[TelegramNotifier] = None
     # TODO: Get from DB
@@ -349,7 +359,7 @@ class ScoreboardNotifier:
             top_n = 10
         top_n = min(top_n, _MAX_NOTIFICATION_TEAM_COUNT)
 
-        top_teams = self._scoreboard.teams[:top_n]
+        top_teams = _get_top_teams(self._scoreboard, top_n)
         top_rank = self._get_current_rank(top_teams)
         advancing_rank = await self._get_advancing_rank()
         message = _concat_paragraphs(top_rank, advancing_rank)
@@ -425,7 +435,7 @@ class ScoreboardNotifier:
     ) -> None:
         to_add_teams: List[ParsedBocaScoreboardTeam] = []
         if top_query:
-            to_add_teams += self._scoreboard.teams[:top_query]
+            to_add_teams += _get_top_teams(self._scoreboard, top_query)
         if team_queries:
             to_add_teams += self._filter_teams(self._scoreboard, team_queries)
 
@@ -600,8 +610,8 @@ class ScoreboardNotifier:
             if self._previous_scoreboard:
                 top_query = await _get_top_subscription(user)
                 if top_query:
-                    previous_top = self._previous_scoreboard.teams[:top_query] if self._previous_scoreboard else []
-                    current_top = self._scoreboard.teams[:top_query] if self._scoreboard else []
+                    previous_top = _get_top_teams(self._previous_scoreboard, top_query)
+                    current_top = _get_top_teams(self._scoreboard, top_query)
                     # Only check the order to see if the top has changed
                     previous_top_team_names = [team.name for team in previous_top]
                     current_top_team_names = [team.name for team in current_top]

@@ -104,7 +104,7 @@ def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) 
         site_id = onclick_js[onclick_js.index("(")+1:-1]
         teams_elements = table.find_all("tr", {"class": f"sitegroup{site_id}"})
     else:
-        teams_elements = table_rows[1:]
+        teams_elements = table.find_all("tr", {"class": "sitegroup1"})
 
     teams = []
     seen_team_names: Set[str] = set()

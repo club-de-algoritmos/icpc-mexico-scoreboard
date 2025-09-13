@@ -202,14 +202,14 @@ def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
             result_text = problem_element.text.strip()
             if result_text != "-":
                 if result_text.startswith("X"):
-                    tries = int(result_text[2:-1])
+                    tries = int(result_text.replace("+", "").strip())
                 else:
                     accepted_element = problem_element.find(class_="accept-text")
                     if not accepted_element:
                         # TODO: Get tries
                         continue
-                    tries_text = accepted_element.contents[0].text.strip()
-                    tries = 1 + int((tries_text[1:] or "0"))
+                    tries_text = accepted_element.contents[0].text.replace("+", "").strip()
+                    tries = 1 + int(tries_text or "0")
                     solved_at = int(accepted_element.contents[-1].text.strip())
                     is_solved = True
 

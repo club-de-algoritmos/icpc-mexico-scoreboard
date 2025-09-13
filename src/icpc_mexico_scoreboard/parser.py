@@ -210,7 +210,7 @@ def _parse_animeitor_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
                         continue
                     tries_text = accepted_element.contents[0].text.strip()
                     tries = 1 + int((tries_text[1:] or "0"))
-                    solved_at = int(accepted_element.contents[2].text.strip())
+                    solved_at = int(accepted_element.contents[-1].text.strip())
                     is_solved = True
 
             problem_result = ParsedBocaScoreboardProblem(

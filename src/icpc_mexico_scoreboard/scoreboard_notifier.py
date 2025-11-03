@@ -25,6 +25,8 @@ _SCOREBOARD_PRE_START_TIME = timedelta(hours=2)
 
 _MAX_NOTIFICATION_TEAM_COUNT = 30
 
+_USE_NEW_NOTIFICATION_FORMAT = True
+
 
 def _format_code(code: str) -> str:
     return f"<code>{html.escape(code)}</code>"
@@ -513,6 +515,9 @@ class ScoreboardNotifier:
         return f"{team.total_solved} problemas {solved_names}"
 
     def _get_team_summary(self, team: ParsedBocaScoreboardTeam) -> str:
+        if _USE_NEW_NOTIFICATION_FORMAT:
+            return f"<b>#{team.place}</b> {_format_code(team.name)}: {team.total_solved} AC ({team.total_penalty})"
+
         solved_summary = self._get_solved_summary(team)
         return f"<b>#{team.place}</b> {_format_code(team.name)} " \
                f"resolvió {solved_summary} en {team.total_penalty} minutos"
@@ -583,14 +588,23 @@ class ScoreboardNotifier:
                 continue
 
             old_team = teams[new_team.name]
-            solved_diff_summary = self._get_solved_diff_summary(old_team, new_team)
-            if solved_diff_summary:
-                update = f"El equipo {_format_code(new_team.name)} resolvió {solved_diff_summary}, y "
-                if old_team.place == new_team.place:
-                    update += f"quedándose en el mismo lugar <b>#{old_team.place}</b>"
-                else:
-                    update += f"cambiando del lugar #{old_team.place} al <b>#{new_team.place}</b>"
-                updates.append(update)
+            if _USE_NEW_NOTIFICATION_FORMAT:
+                solved_problems = self._get_solved_names(new_team).difference(
+                    self._get_solved_names(old_team)
+                )
+                if solved_problems:
+                    solved_names = ",".join(sorted(solved_problems))
+                    update = f"{_format_code(new_team.name)} | {solved_names} -> {new_team.total_solved} AC ({new_team.total_penalty}) | #{old_team.place} -> #{new_team.place}"
+                    updates.append(update)
+            else:
+                solved_diff_summary = self._get_solved_diff_summary(old_team, new_team)
+                if solved_diff_summary:
+                    update = f"El equipo {_format_code(new_team.name)} resolvió {solved_diff_summary}, y "
+                    if old_team.place == new_team.place:
+                        update += f"quedándose en el mismo lugar <b>#{old_team.place}</b>"
+                    else:
+                        update += f"cambiando del lugar #{old_team.place} al <b>#{new_team.place}</b>"
+                    updates.append(update)
 
         return "\n".join(updates)
 

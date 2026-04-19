@@ -10,6 +10,7 @@ from typing import List, Dict, Set, Optional, Iterable
 from django import db
 from django.db.models import QuerySet
 
+from icpc_mexico_scoreboard import string_utils
 from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest, ScoreboardStatus
 from icpc_mexico_scoreboard.db.queries import get_repechaje_teams_that_have_advanced
 from icpc_mexico_scoreboard.db.util import close_connection
@@ -484,16 +485,19 @@ class ScoreboardNotifier:
         await self._telegram.send_message(f"Ya no sigues el top {previous_top}", telegram_user.chat_id)
 
     def _filter_teams(
-            self,
-            scoreboard: Optional[ParsedBocaScoreboard],
-            queries: Iterable[str],
+        self,
+        scoreboard: Optional[ParsedBocaScoreboard],
+        queries: Iterable[str],
     ) -> List[ParsedBocaScoreboardTeam]:
         if not scoreboard:
             return []
 
+        normalized_queries = [string_utils.normalize(query) for query in queries]
+
         def matches_team(team: ParsedBocaScoreboardTeam) -> bool:
-            for query in queries:
-                if query.lower().strip() in team.name.lower():
+            normalized_team_name = string_utils.normalize(team.name)
+            for query in normalized_queries:
+                if query in normalized_team_name:
                     return True
             return False
 

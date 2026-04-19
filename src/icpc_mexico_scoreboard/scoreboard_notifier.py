@@ -271,6 +271,14 @@ class ScoreboardNotifier:
         if (contest.scoreboard_status == ScoreboardStatus.WAITING_TO_BE_RELEASED
                 and self._previous_scoreboard
                 and self._previous_scoreboard != self._scoreboard):
+            if contest.ends_at < datetime.utcnow() < contest.ends_at + timedelta(minutes=5):
+                # The scoreboard changed, but it's very unlikely that it was auto-released
+                await self._notify_all_subscribed_users(
+                    f"El concurso <i>{contest.name}</i> acaba de terminar y sus resultados cambiaron, "
+                    f"probablemente porque hubo algún rejueceo y no porque hayan sido liberados")
+                await self._notify_rank_updates(contest)
+                return
+
             # A scoreboard change means it was released
             contest.scoreboard_status = ScoreboardStatus.RELEASED
             await contest.asave()

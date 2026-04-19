@@ -707,7 +707,7 @@ class ScoreboardNotifier:
             if not params:
                 await self._telegram.send_developer_message(f'Specify the status: {[status.value for status in ScoreboardStatus]}')
                 return
-            contest.status = ScoreboardStatus(params[0])
+            contest.scoreboard_status = ScoreboardStatus(params[0])
         elif command == 'max-teams':
             contest.max_teams_to_advance = int(params[0])
 

@@ -662,7 +662,9 @@ class ScoreboardNotifier:
             await self._telegram.send_developer_message(f'Invalid command. Options: {valid_commands}')
             return
 
-        contest = await _get_current_contest()
+        contest = await _get_next_contest()
+        if not contest:
+            contest = await _get_last_contest()
         if not contest:
             await self._telegram.send_developer_message('No contest is running')
             return

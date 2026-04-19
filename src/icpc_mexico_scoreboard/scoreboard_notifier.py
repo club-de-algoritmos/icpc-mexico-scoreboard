@@ -657,7 +657,7 @@ class ScoreboardNotifier:
         db.close_old_connections()
 
         args = [a for a in text.split(' ') if a]
-        valid_commands = ['name', 'scoreboard', 'time', 'max-teams', 'add']
+        valid_commands = ['name', 'scoreboard', 'time', 'status', 'max-teams', 'add']
         command = args[0] if args else ''
         if command not in valid_commands:
             await self._telegram.send_developer_message(f'Invalid command. Options: {valid_commands}')
@@ -703,6 +703,11 @@ class ScoreboardNotifier:
             contest.starts_at += delta
             contest.freezes_at += delta
             contest.ends_at += delta
+        elif command == 'status':
+            if not params:
+                await self._telegram.send_developer_message(f'Specify the status: {[status.value for status in ScoreboardStatus]}')
+                return
+            contest.status = ScoreboardStatus(params[0])
         elif command == 'max-teams':
             contest.max_teams_to_advance = int(params[0])
 

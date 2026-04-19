@@ -18,6 +18,7 @@ from icpc_mexico_scoreboard.db.util import close_connection
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard
 from icpc_mexico_scoreboard.parser_types import ParsedBocaScoreboard, ParsedBocaScoreboardTeam, NotAScoreboardError
 from icpc_mexico_scoreboard.telegram_notifier import TelegramNotifier, TelegramUser
+from icpc_mexico_scoreboard.time_utils import format_as_local_time
 
 logger = logging.getLogger(__name__)
 
@@ -312,7 +313,8 @@ class ScoreboardNotifier:
                 or (last_contest and last_contest.scoreboard_status == ScoreboardStatus.ARCHIVED)
         )):
             time_to_start = _get_time_delta_as_human(now, next_contest.starts_at)
-            return (f"El concurso <i>{next_contest.name}</i> iniciará en {time_to_start}.\n"
+            starts_at_date = format_as_local_time(next_contest.starts_at)
+            return (f"El concurso <i>{next_contest.name}</i> iniciará en {time_to_start} ({starts_at_date}).\n"
                     f"Podrás ver su scoreboard completo <a href='{next_contest.scoreboard_url}'>aquí</a>, "
                     f"o usando este bot (mira <a href='/ayuda'>/ayuda</a> para saber cómo).")
 
@@ -335,7 +337,7 @@ class ScoreboardNotifier:
                 last_contest_desc += f"terminó hace {time_after_end} y sus resultados son finales"
                 if next_contest:
                     time_to_start = _get_time_delta_as_human(now, next_contest.starts_at)
-                    starts_at_date = next_contest.starts_at.strftime("%Y-%m-%d")
+                    starts_at_date = format_as_local_time(next_contest.starts_at)
                     next_contest_desc = (f"El siguiente concurso <i>{next_contest.name}</i> "
                                          f"iniciará en {time_to_start} ({starts_at_date}).")
             else:

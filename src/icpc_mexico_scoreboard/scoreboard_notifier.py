@@ -11,6 +11,7 @@ from django import db
 from django.db.models import QuerySet
 
 from icpc_mexico_scoreboard import string_utils
+from icpc_mexico_scoreboard.admin.contests import create_contest
 from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest, ScoreboardStatus
 from icpc_mexico_scoreboard.db.queries import get_repechaje_teams_that_have_advanced
 from icpc_mexico_scoreboard.db.util import close_connection
@@ -655,11 +656,32 @@ class ScoreboardNotifier:
     async def _admin(self, text: str) -> None:
         db.close_old_connections()
 
-        args = text.split(' ')
-        valid_commands = ['name', 'scoreboard', 'time', 'max-teams']
+        args = [a for a in text.split(' ') if a]
+        valid_commands = ['name', 'scoreboard', 'time', 'max-teams', 'add']
         command = args[0] if args else ''
         if command not in valid_commands:
             await self._telegram.send_developer_message(f'Invalid command. Options: {valid_commands}')
+            return
+
+        params = args[1:]
+
+        if command == 'add':
+            if len(params) < 3:
+                await self._telegram.send_developer_message('Not enough parameters, need: scoreboard_url starts_at name')
+                return
+
+            scoreboard_url = params[0]
+            starts_at = datetime.fromisoformat(params[1])
+            name = " ".join(params[2:])
+            await Contest.objects.acreate(
+                name=name,
+                scoreboard_url=scoreboard_url,
+                scoreboard_status=ScoreboardStatus.INVISIBLE,
+                starts_at=starts_at,
+                freezes_at=starts_at + timedelta(hours=4),
+                ends_at=starts_at + timedelta(hours=5),
+            )
+            await self._telegram.send_developer_message('Contest created!')
             return
 
         contest = await _get_next_contest()
@@ -669,7 +691,6 @@ class ScoreboardNotifier:
             await self._telegram.send_developer_message('No contest is running')
             return
 
-        params = args[1:]
         if command == 'name':
             contest.name = params[0]
         elif command == 'scoreboard':

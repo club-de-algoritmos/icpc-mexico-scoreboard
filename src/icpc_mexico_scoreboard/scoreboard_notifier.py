@@ -11,7 +11,6 @@ from django import db
 from django.db.models import QuerySet
 
 from icpc_mexico_scoreboard import string_utils
-from icpc_mexico_scoreboard.admin.contests import create_contest
 from icpc_mexico_scoreboard.db.models import ScoreboardUser, ScoreboardSubscription, Contest, ScoreboardStatus
 from icpc_mexico_scoreboard.db.queries import get_repechaje_teams_that_have_advanced
 from icpc_mexico_scoreboard.db.util import close_connection
@@ -22,7 +21,7 @@ from icpc_mexico_scoreboard.time_utils import format_as_local_time
 
 logger = logging.getLogger(__name__)
 
-_SCOREBOARD_RELEASE_TIMEOUT = timedelta(days=5)
+_SCOREBOARD_RELEASE_TIMEOUT = timedelta(days=10)
 
 _SCOREBOARD_PRE_START_TIME = timedelta(hours=2)
 
@@ -240,7 +239,7 @@ class ScoreboardNotifier:
                 contest.scoreboard_status = ScoreboardStatus.RELEASED
                 await contest.asave()
                 await self._telegram.send_developer_message(
-                    f"El concurso <i>{contest.name}</i> terminó hace más de 5 días "
+                    f"El concurso <i>{contest.name}</i> terminó hace más de 10 días "
                     f"y su scoreboard no ha sido liberado, por lo que ha expirado y ya no será leído")
         elif not ScoreboardStatus.is_finished(contest.scoreboard_status):
             # The contest finished, but it hasn't expired, so wait for it to be released

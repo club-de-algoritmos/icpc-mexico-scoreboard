@@ -1,25 +1,14 @@
 import unittest
-from datetime import datetime, timezone
 
 from django.test import TestCase
 
-from icpc_mexico_scoreboard.db.models import Contest, ScoreboardStatus
-
-
-def _make_contest(scoreboard_url: str) -> Contest:
-    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    return Contest.objects.create(
-        name="ICPC Mexico Regional",
-        scoreboard_url=scoreboard_url,
-        starts_at=now,
-        freezes_at=now,
-        ends_at=now,
-    )
+from icpc_mexico_scoreboard.db.models import ScoreboardStatus
+from icpc_mexico_scoreboard.tests.factories import ContestFactory
 
 
 class ContestStrTest(TestCase):
     def setUp(self) -> None:
-        self.contest = _make_contest("https://score.icpcmexico.org")
+        self.contest = ContestFactory(name="ICPC Mexico Regional")
 
     def test_includes_name(self) -> None:
         self.assertEqual(str(self.contest), "Contest ICPC Mexico Regional")
@@ -27,11 +16,11 @@ class ContestStrTest(TestCase):
 
 class ContestIsOfficialTest(TestCase):
     def test_official_scoreboard_is_official(self) -> None:
-        contest = _make_contest("https://score.icpcmexico.org")
+        contest = ContestFactory(scoreboard_url="https://score.icpcmexico.org")
         self.assertTrue(contest.is_official)
 
     def test_rpc_scoreboard_is_not_official(self) -> None:
-        contest = _make_contest("https://redprogramacioncompetitiva.com/scoreboard")
+        contest = ContestFactory(scoreboard_url="https://redprogramacioncompetitiva.com/scoreboard")
         self.assertFalse(contest.is_official)
 
 

@@ -35,9 +35,10 @@ There is no CI yet — tests are run locally only.
 - Only put data in `setUp()` if most of the class's test methods need it. If only one test needs something,
   create it inline in that test method instead. Do not introduce `conftest.py` fixtures for this project —
   data should be visible either in `setUp()` or in the test itself, not injected from elsewhere.
-- Build model instances directly via `Model.objects.create(...)`. The models here (`Contest`,
-  `ScoreboardUser`, `ScoreboardSubscription`) are few and simple enough that `factory_boy`-style factories
-  aren't worth the indirection.
+- Build model instances with the `factory_boy` factories in `factories.py` (e.g. `ContestFactory()`) instead
+  of calling `Model.objects.create(...)` directly. Explicitly pass any field the test asserts on; leave the
+  rest to the factory's defaults. Add a factory there the first time a model is needed in a test — don't
+  pre-build factories for models nothing tests yet.
 - Name classes after what they test, e.g. `class NormalizeTest(unittest.TestCase)` for `normalize`,
   `class ContestStrTest(TestCase)` for `Contest.__str__`. See the existing files in this directory for the
   pattern.

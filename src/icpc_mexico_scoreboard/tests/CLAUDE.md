@@ -48,6 +48,17 @@ There is no CI yet — tests are run locally only.
   themselves synchronous, then call the async function under test via `asgiref.sync.async_to_sync(fn)(...)`.
   Don't make the test method itself `async def`: Django's async-safety check raises
   `SynchronousOnlyOperation` the moment a sync ORM call runs inside a coroutine.
+- `USE_TZ` is not set (so it defaults to `False`): this codebase works with naive `datetime`s throughout,
+  always representing UTC by convention (e.g. `_get_last_contest`/`_get_next_contest` compare against
+  `datetime.utcnow()`, and `Contest.starts_at` etc. are stored naive). Build test datetimes the same way
+  (`datetime.utcnow()`, not `datetime.now(timezone.utc)`) — an aware datetime gets silently converted by
+  Django before saving, which can shift the value and make time-window assertions flaky.
+- For pure logic that only reads a model's fields (e.g. `ScoreboardNotifier._get_rank_update` reading
+  `contest.starts_at`), build the instance with `ContestFactory.build(...)` instead of the default
+  `ContestFactory(...)` — `.build()` skips the DB save, so the test can stay a `unittest.TestCase`.
+- `_admin` (and anything else that calls `django.db.close_old_connections()`) really closes the DB
+  connection. Inside a `TestCase`, that breaks the test's wrapping transaction. Mock it:
+  `@patch("icpc_mexico_scoreboard.scoreboard_notifier.db.close_old_connections")`.
 
 `pytest-django` (configured in the root `pytest.ini`) auto-detects and runs both `unittest.TestCase` and
 `django.test.TestCase` subclasses correctly, so no special markers or config are needed beyond what's already

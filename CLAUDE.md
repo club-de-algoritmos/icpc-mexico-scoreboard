@@ -17,8 +17,9 @@ All commands are run from the repository root (not `src/`); `manage.py` adds `sr
 - Run the bot (also installs deps and applies migrations first): `bin/run.sh` — kills any already-running `run_scoreboard` process, then runs `python src/run_scoreboard.py` in the background, logging to `scoreboard.log`
 - Run the bot directly in the foreground: `python src/run_scoreboard.py`
 - Django/IPython shell with project models pre-imported: `bin/django_shell.sh` (imports come from `bin/django_shell_imports.py`)
+- Run tests: `python -m pytest src` — see `src/icpc_mexico_scoreboard/tests/CLAUDE.md` for the local MySQL test DB setup and test-style conventions
 
-There is no test suite and no configured linter in this repo.
+There is no configured linter in this repo.
 
 ## Architecture
 

@@ -3,9 +3,12 @@ import os
 import environ
 
 
-env = environ.Env()
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load env vars here (rather than relying solely on manage.py/run_scoreboard.py doing it) so this
+# settings module also works when imported directly, e.g. by pytest-django.
+environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
+env = environ.Env()
 
 DATABASES = {
     "default": {

@@ -35,6 +35,8 @@ def parse_boca_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
     """Parses the scoreboard of a BOCA contest."""
     if 'animeitor' in scoreboard_url:
         scoreboard = _parse_animeitor_scoreboard(scoreboard_url)
+    elif 'moj.naquadah.com.br' in scoreboard_url:
+        scoreboard = _parse_moj_scoreboard(scoreboard_url)
     else:
         scoreboard = _parse_boca_scoreboard(scoreboard_url)
 
@@ -150,6 +152,73 @@ def _parse_boca_scoreboard(scoreboard_url: str, wait_for_session: bool = False) 
 
         team = ParsedBocaScoreboardTeam(
             name=name, place=place, user_site=user_site, total_solved=total_solved, total_penalty=total_penalty,
+            problems=problems)
+        teams.append(team)
+
+    return ParsedBocaScoreboard(teams=teams)
+
+
+def _parse_moj_scoreboard(scoreboard_url: str) -> ParsedBocaScoreboard:
+    """Parses the scoreboard of a MOJ (Naquadah judge, moj.naquadah.com.br) contest. Unlike
+    `_parse_boca_scoreboard`, the table is populated by JS after the initial page load (an
+    empty `<tbody>` is served first), so this always drives a headless browser rather than
+    a plain HTTP GET, waiting for at least one team row to show up before reading the DOM.
+    """
+    driver = _get_webdriver()
+    driver.get(scoreboard_url)
+    try:
+        WebDriverWait(driver, 20).until(
+            expected_conditions.presence_of_element_located(
+                (By.CSS_SELECTOR, "table.score tbody tr")
+            )
+        )
+    except TimeoutException:
+        raise NotAScoreboardError("Scoreboard table not found")
+    scoreboard_html = driver.page_source
+    driver.quit()
+
+    html = BeautifulSoup(scoreboard_html, "html.parser")
+    table = html.find("table", class_="score")
+    if not table:
+        raise NotAScoreboardError("Scoreboard table not found")
+
+    thead = table.find("thead")
+    tbody = table.find("tbody")
+    if not thead or not tbody:
+        raise NotAScoreboardError("Scoreboard header not found")
+
+    header_cells = thead.find_all("th")
+    # Columns: #, flag, Team, one per problem, Total, Pen.
+    problem_names = [cell.text.strip() for cell in header_cells[3:-2]]
+
+    teams = []
+    for row in tbody.find_all("tr", recursive=False):
+        cells = row.find_all("td")
+        place = int(cells[0].text.strip())
+        name = cells[2].text.strip()
+        total_solved = int(cells[-2].text.strip())
+        penalty_element = cells[-1].find(class_="pv")
+        total_penalty = int(penalty_element.text.strip()) if penalty_element else 0
+
+        problems = []
+        for idx, cell in enumerate(cells[3:-2]):
+            tries = 0
+            solved_at = 0
+            is_solved = "ok" in (cell.get("class") or [])
+            result_element = cell.find(class_="pv")
+            result_text = result_element.text.strip() if result_element else ""
+            if result_text:
+                tries_text, _, solved_text = result_text.partition("/")
+                tries = int(tries_text)
+                if solved_text != "-":
+                    solved_at = int(solved_text)
+
+            problem_result = ParsedBocaScoreboardProblem(
+                name=problem_names[idx], tries=tries, solved_at=solved_at, is_solved=is_solved)
+            problems.append(problem_result)
+
+        team = ParsedBocaScoreboardTeam(
+            name=name, place=place, user_site="", total_solved=total_solved, total_penalty=total_penalty,
             problems=problems)
         teams.append(team)
 

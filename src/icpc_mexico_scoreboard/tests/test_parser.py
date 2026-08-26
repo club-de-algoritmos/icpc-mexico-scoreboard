@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from selenium.common import TimeoutException
+
 from icpc_mexico_scoreboard.parser import parse_boca_scoreboard
 from icpc_mexico_scoreboard.parser_types import NotAScoreboardError, ParsedBocaScoreboardProblem
 
@@ -81,6 +83,39 @@ def _mock_response(html: str) -> MagicMock:
 
 def _problem(name: str, tries: int, solved_at: int, is_solved: bool) -> ParsedBocaScoreboardProblem:
     return ParsedBocaScoreboardProblem(name=name, tries=tries, solved_at=solved_at, is_solved=is_solved)
+
+
+def _moj_cell(name: str, tries: int, solved_at) -> str:
+    if tries == 0:
+        return f'<td class="cell" title="{name}"><span class="pv"></span></td>'
+    penalty_text = str(solved_at) if solved_at is not None else "-"
+    cls = "cell ok" if solved_at is not None else "cell c-try prob-wait-cell"
+    return (
+        f'<td class="{cls}" title="{name}: {tries} attempts">'
+        f'<span class="pv">{tries}/{penalty_text}</span></td>'
+    )
+
+
+def _moj_row(place: int, name: str, total_solved: int, total_penalty: int, *cells: str) -> str:
+    return (
+        f'<tr id="tr-team-{name.lower()}"><td class="cl-place">{place}</td><td></td>'
+        f'<td class="team" title="{name.lower()}">{name}</td>'
+        f"{''.join(cells)}"
+        f'<td class="cell tot">{total_solved}</td>'
+        f'<td class="cell pen"><span class="pv">{total_penalty}</span></td></tr>'
+    )
+
+
+def _moj_table(problem_letters: list, *rows: str) -> str:
+    header_cells = "".join(f"<th>{letter}</th>" for letter in problem_letters)
+    return f"""
+    <table class="score m-icpc">
+      <thead>
+        <tr><th>#</th><th></th><th>Team</th>{header_cells}<th>Total</th><th>Pen.</th></tr>
+      </thead>
+      <tbody>{"".join(rows)}</tbody>
+    </table>
+    """
 
 
 class ParseBocaScoreboardTest(unittest.TestCase):
@@ -176,3 +211,78 @@ class ParseAnimeitorScoreboardTest(unittest.TestCase):
 
         with self.assertRaises(NotAScoreboardError):
             parse_boca_scoreboard("https://animeitor.example.com/scoreboard")
+
+
+class ParseMojScoreboardTest(unittest.TestCase):
+    _URL = "https://ensaio-times-2026.moj.naquadah.com.br/contest/score/?c=ensaio-times-2026"
+
+    def _run(self, html: str):
+        driver = MagicMock()
+        driver.page_source = html
+        with (
+            patch("icpc_mexico_scoreboard.parser._get_webdriver", return_value=driver),
+            patch("icpc_mexico_scoreboard.parser.WebDriverWait"),
+        ):
+            return parse_boca_scoreboard(self._URL)
+
+    def test_parses_teams_ranks_and_problem_results(self) -> None:
+        html = _moj_table(
+            ["A", "B", "C"],
+            _moj_row(
+                1,
+                "Aviators",
+                2,
+                190,
+                _moj_cell("A", 1, 10),
+                _moj_cell("B", 2, 180),
+                _moj_cell("C", 0, None),
+            ),
+            _moj_row(
+                2,
+                "Falcons",
+                1,
+                60,
+                _moj_cell("A", 3, None),
+                _moj_cell("B", 0, None),
+                _moj_cell("C", 1, 60),
+            ),
+        )
+
+        scoreboard = self._run(html)
+
+        self.assertEqual([team.name for team in scoreboard.teams], ["Aviators", "Falcons"])
+
+        aviators = scoreboard.teams[0]
+        self.assertEqual(aviators.place, 1)
+        self.assertEqual(aviators.total_solved, 2)
+        self.assertEqual(aviators.total_penalty, 190)
+        self.assertEqual(
+            aviators.problems,
+            [
+                _problem("A", tries=1, solved_at=10, is_solved=True),
+                _problem("B", tries=2, solved_at=180, is_solved=True),
+                _problem("C", tries=0, solved_at=0, is_solved=False),
+            ],
+        )
+
+        falcons = scoreboard.teams[1]
+        self.assertEqual(
+            falcons.problems,
+            [
+                _problem("A", tries=3, solved_at=0, is_solved=False),
+                _problem("B", tries=0, solved_at=0, is_solved=False),
+                _problem("C", tries=1, solved_at=60, is_solved=True),
+            ],
+        )
+
+    def test_raises_when_the_scoreboard_table_never_loads(self) -> None:
+        driver = MagicMock()
+        with (
+            patch("icpc_mexico_scoreboard.parser._get_webdriver", return_value=driver),
+            patch(
+                "icpc_mexico_scoreboard.parser.WebDriverWait.until",
+                side_effect=TimeoutException(),
+            ),
+        ):
+            with self.assertRaises(NotAScoreboardError):
+                parse_boca_scoreboard(self._URL)

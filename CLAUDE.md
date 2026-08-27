@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Retired -- superseded by wkoach
+
+This repo's functionality (scoreboard scraping/parsing and the Telegram subscriber bot) has been merged
+into the sibling `wkoach` repo (`wkoach/services/scoreboard/` for parsing/persistence,
+`wkoach/services/telegram/` for the bot) and is no longer developed here. wkoach's version is authoritative
+and ahead of this one (bug fixes, an extra scoreboard-source parser, persisted history this repo never had,
+per-contest-scoped subscriptions instead of a single implicit "current contest"). Treat this repo as
+historical/archival -- a future change to this functionality belongs in wkoach, not here, and shouldn't be
+expected to affect production once wkoach's Telegram bot deploy replaces this one (see wkoach's CLAUDE.md,
+"ICPC Mexico rich scoreboard" section, and its git history for the merge).
+
 ## What this is
 
 A Telegram bot that scrapes BOCA-based ICPC Mexico contest scoreboards and notifies subscribed users of rank/score changes. It is not a web app: Django is used only for its ORM/settings machinery (MySQL) against a single `db` app; there are no views, templates, or URLs.

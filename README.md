@@ -1,5 +1,11 @@
 # ICPC México Scoreboard
 
+**DEPRECATED**
+
+This repo has been deprecated and it is no longer running in production. It has been superseded by `wkoach`, a private project that is way more feature-rich. This was to reduce maintenance, as well as being able to leverage the union of the scoreboard data with Codeforces data.
+
+You can still experience this project via web at https://score.algoritmos.club/, or via Telegram with `@ICPCMexicoScoreboardBot`.
+
 ## Installation
 
 - Install `asdf` ([steps](https://asdf-vm.com/guide/getting-started.html)).
